@@ -144,7 +144,7 @@ async function ensureDb() {
       account: null,
       models,
       friends,
-      groupSettings: createDefaultGroupSettings(friends),
+      groupSettings: createDefaultGroupSettings(friends, models),
       conversations: []
     });
   }
@@ -831,7 +831,10 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/friends" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.friends = Array.isArray(body.friends) ? body.friends : db.friends || [];
+    db.friends = syncDefaultFriendsWithModels(Array.isArray(body.friends) ? body.friends : db.friends || [], db.models || [], {
+      getDefaultFriendSystemPrompt
+    });
+    db.groupSettings = normalizeGroupSettings(db.groupSettings || {}, db.friends, db.models || []);
     await writeDb(db);
     sendJson(res, 200, { friends: db.friends });
     return true;

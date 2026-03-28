@@ -3081,7 +3081,7 @@ function loadConversationByIndex(index, { focus = false } = {}) {
             sharedSystemPrompt: ""
           }
         : defaultGroupSettings),
-    friendProfiles
+    getUsableFriends(friendProfiles, modelConfigs)
   );
   draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
   if (promptInput) {

@@ -472,8 +472,49 @@ a {
 .config-card-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 16px;
+}
+
+.settings-model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.config-test-status {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.config-test-status.pending {
+  background: rgba(77, 107, 254, 0.08);
+  color: var(--blue-deep);
+}
+
+.config-test-status.success {
+  background: rgba(56, 161, 105, 0.1);
+  color: #23734d;
+}
+
+.config-test-status.error {
+  background: rgba(224, 82, 82, 0.08);
+  color: #cb4b4b;
+}
+
+.config-backend-hint {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(77, 107, 254, 0.06);
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
 }
 
 .friend-grid .config-form textarea,
@@ -1000,6 +1041,19 @@ textarea:focus {
   justify-content: center;
 }
 
+body.frontend-access-locked {
+  overflow: hidden;
+}
+
+body.frontend-access-locked .layout {
+  pointer-events: none;
+  user-select: none;
+}
+
+body.frontend-access-locked #frontend-password-modal {
+  pointer-events: auto;
+}
+
 .login-modal-backdrop {
   position: absolute;
   inset: 0;
@@ -1021,6 +1075,47 @@ textarea:focus {
 
 .login-modal-box h2 {
   margin: 0 0 4px;
+}
+
+.frontend-password-box {
+  gap: 12px;
+  padding: 30px;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(246, 249, 255, 0.98) 100%);
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.18);
+}
+
+.page-copy.compact {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.frontend-password-box .text-input {
+  min-height: 48px;
+}
+
+.frontend-password-box .text-input.is-invalid {
+  border-color: rgba(224, 82, 82, 0.45);
+  box-shadow: 0 0 0 4px rgba(224, 82, 82, 0.12);
+}
+
+#frontend-password-modal.shake .login-modal-box {
+  animation: frontend-modal-shake 180ms ease-in-out 2;
+}
+
+@keyframes frontend-modal-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
 }
 
 .login-modal-error {
@@ -1593,6 +1688,47 @@ textarea:focus {
 .group-shared-prompt {
   min-height: 132px;
   resize: vertical;
+}
+
+.group-settings-block-feature {
+  gap: 14px;
+}
+
+.platform-feature-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(77, 107, 254, 0.12);
+  background: linear-gradient(180deg, rgba(240, 245, 255, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
+}
+
+.platform-feature-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.platform-feature-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.model-chip-platform {
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.14) 0%, rgba(111, 144, 255, 0.18) 100%);
+  color: var(--blue-deep);
+}
+
+.model-chip-platform-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .friend-card-meta {

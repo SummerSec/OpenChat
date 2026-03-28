@@ -1,14 +1,23 @@
 import { createServer } from "node:http";
+import { execFile as execFileCallback } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./mock-response-utils.mjs";
+import { buildFallbackSynthesis, buildSynthesisPromptText } from "./synthesis-utils.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, ".data");
 const DATA_FILE = path.join(DATA_DIR, "openchat-db.json");
+const AI_SEARCH_HUB_DIR = path.join(__dirname, "vendor", "ai-search-hub");
+const AI_SEARCH_HUB_RUNNER = path.join(AI_SEARCH_HUB_DIR, "scripts", "run_web_chat.py");
+const AI_SEARCH_OUTPUT_DIR = path.join(DATA_DIR, "ai-search-hub");
 const PORT = Number(process.env.PORT || 8787);
+const execFile = promisify(execFileCallback);
+const AI_SEARCH_PLATFORMS = new Set(["gemini", "grok", "doubao", "yuanbao", "longcat", "qwen", "minimaxi"]);
 
 const DEFAULT_MODELS = [
   {
@@ -94,6 +103,8 @@ function createDefaultGroupSettings(friends = []) {
     memberIds,
     sharedSystemPromptEnabled: false,
     sharedSystemPrompt: "",
+    platformFeatureEnabled: false,
+    preferredPlatform: "gemini",
     synthesisFriendId: memberIds[0] || null
   };
 }
@@ -114,6 +125,8 @@ function normalizeGroupSettings(settings = {}, friends = []) {
     memberIds,
     sharedSystemPromptEnabled: Boolean(settings.sharedSystemPromptEnabled),
     sharedSystemPrompt: String(settings.sharedSystemPrompt || ""),
+    platformFeatureEnabled: Boolean(settings.platformFeatureEnabled),
+    preferredPlatform: String(settings.preferredPlatform || "gemini"),
     synthesisFriendId:
       memberIds.find((id) => id === settings.synthesisFriendId) || memberIds[0] || null
   };
@@ -231,17 +244,42 @@ function parseBody(req) {
   });
 }
 
-function mockResponseFor(friend, language = "zh-CN") {
-  if (language === "zh-CN") {
-    return `${friend.name} 的观点是：先给一个可执行的结论，再补充边界条件、执行顺序和需要验证的风险点。`;
-  }
-  return `${friend.name}'s take: start with the executable answer, then add tradeoffs, execution order, and the key risks to verify.`;
+function mockResponseFor(friend, prompt, language = "zh-CN") {
+  return buildPromptAwareMockResponse({
+    friendName: friend.name,
+    prompt,
+    language,
+    platformName: friend.preferredPlatform || "",
+    platformCompany: "",
+    platformStrengths: ""
+  });
 }
 
-function buildMergedAnswer(language = "zh-CN") {
-  return language === "zh-CN"
-    ? "整合答案：保留最强结构，吸收细节与保守判断，把不同群友的分歧整理后再输出最终建议。"
-    : "Merged answer: keep the strongest structure, preserve nuance, and organize disagreements before presenting the final recommendation.";
+async function buildMergedAnswer(prompt = "", language = "zh-CN", synthesisFriend = null, results = [], groupSettings = {}) {
+  const synthesisPrompt = buildSynthesisPromptText({ prompt, language, results });
+  const systemPrompt = language === "zh-CN"
+    ? `你负责整合多位 AI 群友的输出。请务必阅读 user_prompt 与 member_outputs，基于它们生成最终整合答案，而不是忽略群友内容重新独立作答。输出时先总结共识，再说明关键分歧，最后给出一版清晰可执行的最终回答。${buildPlatformPromptAddon(groupSettings, language)}`
+    : `You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.${buildPlatformPromptAddon(groupSettings, language)}`;
+
+  if (!synthesisFriend?.apiKey || !synthesisFriend?.baseUrl) {
+    return buildFallbackSynthesis({ prompt, language, results });
+  }
+
+  try {
+    const provider = String(synthesisFriend.provider || "").toLowerCase();
+    if (provider.includes("anthropic") || String(synthesisFriend.name || "").toLowerCase().includes("claude")) {
+      const output = await callAnthropic(synthesisFriend, synthesisPrompt, systemPrompt);
+      return output.content || buildFallbackSynthesis({ prompt, language, results });
+    }
+    if (provider.includes("google") || String(synthesisFriend.name || "").toLowerCase().includes("gemini")) {
+      const output = await callGemini(synthesisFriend, synthesisPrompt, systemPrompt);
+      return output.content || buildFallbackSynthesis({ prompt, language, results });
+    }
+    const output = await callOpenAICompatible(synthesisFriend, synthesisPrompt, systemPrompt);
+    return output.content || buildFallbackSynthesis({ prompt, language, results });
+  } catch {
+    return buildFallbackSynthesis({ prompt, language, results });
+  }
 }
 
 function buildDisagreements(language = "zh-CN") {
@@ -256,6 +294,69 @@ function buildDisagreements(language = "zh-CN") {
         "Verification-oriented friends are more conservative about unsupported claims.",
         "Different underlying models can vary in style, latency, and output quality."
       ];
+}
+
+function buildPlatformPromptAddon(groupSettings = {}, language = "zh-CN") {
+  if (!groupSettings.platformFeatureEnabled || !groupSettings.preferredPlatform) return "";
+  if (language === "zh-CN") {
+    return `\n\n平台路由要求：本次会话优先参考 ${groupSettings.preferredPlatform} 对应的数据生态与搜索能力，尽量体现该平台更容易触达的信息视角，并明确结论边界。`;
+  }
+  return `\n\nPlatform routing requirement: prioritize the ${groupSettings.preferredPlatform} ecosystem and reflect that platform's likely information vantage point while keeping confidence boundaries explicit.`;
+}
+
+function getPythonCommand() {
+  return process.platform === "win32" ? { command: "py", args: [] } : { command: "python3", args: [] };
+}
+
+async function aiSearchHubAvailable() {
+  try {
+    await stat(AI_SEARCH_HUB_RUNNER);
+    const { command, args } = getPythonCommand();
+    await execFile(command, args.concat(["-c", "import playwright"]), {
+      cwd: AI_SEARCH_HUB_DIR,
+      timeout: 15000,
+      windowsHide: true,
+      maxBuffer: 1024 * 256
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runAiSearchHub(platform, prompt) {
+  if (!platform || !AI_SEARCH_PLATFORMS.has(platform)) {
+    throw new Error(`Unsupported AI Search Hub platform: ${platform}`);
+  }
+  if (!(await aiSearchHubAvailable())) {
+    throw new Error("AI Search Hub runner is not installed.");
+  }
+
+  const { command, args } = getPythonCommand();
+  const timestamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const outputPath = path.join(AI_SEARCH_OUTPUT_DIR, `${platform}-${timestamp}.txt`);
+  await mkdir(AI_SEARCH_OUTPUT_DIR, { recursive: true });
+
+  const runArgs = args.concat([
+    AI_SEARCH_HUB_RUNNER,
+    "--site",
+    platform,
+    "--prompt",
+    prompt,
+    "--repo-root",
+    AI_SEARCH_HUB_DIR,
+    "--output",
+    outputPath
+  ]);
+
+  await execFile(command, runArgs, {
+    cwd: AI_SEARCH_HUB_DIR,
+    timeout: 240000,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024 * 4
+  });
+
+  return String(await readFile(outputPath, "utf8")).trim();
 }
 
 async function callOpenAICompatible(model, prompt, systemPrompt = "") {
@@ -366,6 +467,30 @@ async function generateFriendResponse(friend, prompt, language) {
     baseUrl: friend.baseUrl,
     apiKey: friend.apiKey
   };
+  const platformLabel = friend.preferredPlatform || "";
+
+  if (platformLabel) {
+    try {
+      const content = await runAiSearchHub(platformLabel, prompt);
+      if (content) {
+        return {
+          friendId: friend.id,
+          name: friend.name,
+          avatar: friend.avatar || "",
+          modelConfigId: friend.modelConfigId,
+          modelConfigName: friend.modelConfigName,
+          provider: friend.provider,
+          model: friend.model,
+          source: language === "zh-CN" ? `AI Search Hub · ${platformLabel}` : `AI Search Hub · ${platformLabel}`,
+          content,
+          thinking: ""
+        };
+      }
+    } catch (error) {
+      friend.aiSearchHubError = error.message;
+    }
+  }
+
   if (!model.apiKey || !model.baseUrl) {
     return {
       friendId: friend.id,
@@ -375,9 +500,16 @@ async function generateFriendResponse(friend, prompt, language) {
       modelConfigName: friend.modelConfigName,
       provider: friend.provider,
       model: friend.model,
-      source: language === "zh-CN" ? "模拟结果" : "mock",
-      content: mockResponseFor(friend, language),
-      thinking: ""
+      source: platformLabel
+        ? language === "zh-CN"
+          ? `模拟结果 · ${platformLabel}`
+          : `mock · ${platformLabel}`
+        : language === "zh-CN"
+        ? "模拟结果"
+        : "mock",
+      content: mockResponseFor(friend, prompt, language),
+      thinking: "",
+      error: friend.aiSearchHubError || ""
     };
   }
 
@@ -400,8 +532,14 @@ async function generateFriendResponse(friend, prompt, language) {
       modelConfigName: friend.modelConfigName,
       provider: friend.provider,
       model: friend.model,
-      source: language === "zh-CN" ? "实时结果" : "live",
-      content: output.content || mockResponseFor(friend, language),
+      source: platformLabel
+        ? language === "zh-CN"
+          ? `实时结果 · ${platformLabel}`
+          : `live · ${platformLabel}`
+        : language === "zh-CN"
+        ? "实时结果"
+        : "live",
+      content: output.content || mockResponseFor(friend, prompt, language),
       thinking: output.thinking || ""
     };
   } catch (error) {
@@ -413,8 +551,14 @@ async function generateFriendResponse(friend, prompt, language) {
       modelConfigName: friend.modelConfigName,
       provider: friend.provider,
       model: friend.model,
-      source: language === "zh-CN" ? "回退结果" : "fallback",
-      content: mockResponseFor(friend, language),
+      source: platformLabel
+        ? language === "zh-CN"
+          ? `回退结果 · ${platformLabel}`
+          : `fallback · ${platformLabel}`
+        : language === "zh-CN"
+        ? "回退结果"
+        : "fallback",
+      content: mockResponseFor(friend, prompt, language),
       thinking: "",
       error: error.message
     };
@@ -478,10 +622,14 @@ function resolveRunPayload(body = {}, db = {}) {
     .filter(Boolean)
     .map((friend) => ({
       ...friend,
+      preferredPlatform: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform : "",
       systemPrompt: groupSettings.sharedSystemPromptEnabled
-        ? String(groupSettings.sharedSystemPrompt || "")
-        : String(friend.systemPrompt || "")
+        ? `${String(groupSettings.sharedSystemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
+        : `${String(friend.systemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
     }));
+
+  const synthesisFriend =
+    runFriends.find((item) => item.id === groupSettings.synthesisFriendId) || runFriends[0] || null;
 
   return {
     prompt,
@@ -489,7 +637,8 @@ function resolveRunPayload(body = {}, db = {}) {
     models,
     allFriends: normalizedFriends,
     friends: runFriends,
-    groupSettings
+    groupSettings,
+    synthesisFriend
   };
 }
 
@@ -512,6 +661,8 @@ function buildConversationRecord({
     models: friends.map((item) => item.modelConfigName || item.name),
     synthesisFriendId: synthesisFriend?.id || null,
     synthesisModel: synthesisFriend?.name || "",
+    preferredPlatformId: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform || "" : "",
+    preferredPlatformName: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform || "" : "",
     runtimeMode: "backend",
     createdAt: now,
     updatedAt: now,
@@ -535,6 +686,8 @@ function buildConversationRecord({
       memberIds: [...groupSettings.memberIds],
       sharedSystemPromptEnabled: Boolean(groupSettings.sharedSystemPromptEnabled),
       sharedSystemPrompt: String(groupSettings.sharedSystemPrompt || ""),
+      platformFeatureEnabled: Boolean(groupSettings.platformFeatureEnabled),
+      preferredPlatform: String(groupSettings.preferredPlatform || "gemini"),
       synthesisFriendId: groupSettings.synthesisFriendId || null
     },
     messages: [
@@ -557,7 +710,8 @@ function buildConversationRecord({
         source: item.source,
         content: item.content,
         thinking: item.thinking || "",
-        createdAt: now
+        createdAt: now,
+        error: item.error || ""
       })),
       {
         role: "assistant",
@@ -616,6 +770,36 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  if (url.pathname === "/api/models/test" && req.method === "POST") {
+    const body = await parseBody(req);
+    const model = body.model || {};
+    const language = body.language || "zh-CN";
+    if (!model.baseUrl || !model.apiKey) {
+      sendJson(res, 400, { ok: false, message: "Missing Base URL or API key" });
+      return true;
+    }
+
+    try {
+      const provider = String(model.provider || "").toLowerCase();
+      const prompt = language === "zh-CN" ? "请只回复：连接测试成功" : "Reply with: connection test ok";
+      let output = { content: "", thinking: "" };
+      if (provider.includes("anthropic") || String(model.name || "").toLowerCase().includes("claude")) {
+        output = await callAnthropic(model, prompt, "");
+      } else if (provider.includes("google") || String(model.name || "").toLowerCase().includes("gemini")) {
+        output = await callGemini(model, prompt, "");
+      } else {
+        output = await callOpenAICompatible(model, prompt, "");
+      }
+      sendJson(res, 200, {
+        ok: true,
+        message: output.content || (language === "zh-CN" ? "连接测试成功" : "Connection successful")
+      });
+    } catch (error) {
+      sendJson(res, 500, { ok: false, message: error.message });
+    }
+    return true;
+  }
+
   if (url.pathname === "/api/friends" && req.method === "GET") {
     const db = await readDb();
     sendJson(res, 200, { friends: db.friends || [] });
@@ -664,14 +848,14 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/chat/run" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    const { prompt, language, friends, groupSettings } = resolveRunPayload(body, db);
+    const { prompt, language, friends, groupSettings, synthesisFriend } = resolveRunPayload(body, db);
     if (!prompt || friends.length === 0) {
       sendJson(res, 400, { error: "Need prompt and at least one selected friend." });
       return true;
     }
 
     const results = await Promise.all(friends.map((friend) => generateFriendResponse(friend, prompt, language)));
-    const mergedAnswer = buildMergedAnswer(language);
+    const mergedAnswer = await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings);
     const disagreements = buildDisagreements(language);
     const conversation = buildConversationRecord({
       prompt,
@@ -694,7 +878,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/chat/run/stream" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    const { prompt, language, friends, groupSettings } = resolveRunPayload(body, db);
+    const { prompt, language, friends, groupSettings, synthesisFriend } = resolveRunPayload(body, db);
     if (!prompt || friends.length === 0) {
       sendJson(res, 400, { error: "Need prompt and at least one selected friend." });
       return true;
@@ -726,7 +910,7 @@ async function handleApi(req, res, url) {
       results.push(result);
     }
 
-    const mergedAnswer = buildMergedAnswer(language);
+    const mergedAnswer = await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings);
     const disagreements = buildDisagreements(language);
     await streamChunks(res, { type: "synthesis_delta", friendId: groupSettings.synthesisFriendId }, mergedAnswer);
 

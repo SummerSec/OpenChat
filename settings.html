@@ -14,6 +14,25 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="frontend-password-modal" class="login-modal" hidden>
+      <div class="login-modal-backdrop" id="frontend-password-backdrop"></div>
+      <div class="login-modal-box frontend-password-box">
+        <p class="panel-label" data-i18n="common.frontendPasswordEyebrow"></p>
+        <h2 data-i18n="common.frontendPasswordTitle"></h2>
+        <p class="page-copy compact" data-i18n="common.frontendPasswordCopy"></p>
+        <label class="field-label" for="frontend-password-input" data-i18n="common.frontendPasswordLabel"></label>
+        <input
+          class="text-input"
+          id="frontend-password-input"
+          type="password"
+          autocomplete="current-password"
+          data-i18n-placeholder="common.frontendPasswordPlaceholder"
+        />
+        <div id="frontend-password-error" class="login-modal-error" hidden></div>
+        <button class="primary-button" id="frontend-password-submit" data-i18n="common.frontendPasswordAction"></button>
+      </div>
+    </div>
+
     <div class="layout">
       <aside class="sidebar">
         <div class="sidebar-rail">
@@ -83,7 +102,10 @@
               <p class="panel-label" data-i18n="settings.modelLabel"></p>
               <h2 data-i18n="settings.modelTitle"></h2>
             </div>
-            <button class="ghost-button" id="add-custom-model" data-i18n="settings.addModel"></button>
+            <div class="settings-model-actions">
+              <button class="ghost-button" id="test-enabled-models" data-i18n="common.testAllModels"></button>
+              <button class="ghost-button" id="add-custom-model" data-i18n="settings.addModel"></button>
+            </div>
           </div>
           <div class="config-grid" id="config-grid"></div>
         </section>

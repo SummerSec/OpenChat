@@ -7,3 +7,4 @@ server.out
 server.err
 workspace-home.png
 *.log
+public/frontend-auth.local.json

@@ -1,27 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 
-const SCRIPT_PATH = new URL("./script.js", import.meta.url);
+import { renderAssistantMessageContent } from "./script-rendering-utils.mjs";
 
-async function readScript() {
-  return readFile(SCRIPT_PATH, "utf8");
+function buildLoadingBody() {
+  return '<div class="ai-card-body loading">Loading</div>';
 }
 
-test("script imports markdown renderer and adds guarded synthesis helper", async () => {
-  const script = await readScript();
+test("renders synthesis assistant content with markdown output", () => {
+  const html = renderAssistantMessageContent({
+    content: "# Final answer\n\nUse **bold** insight.",
+    isLoading: false,
+    kind: "synthesis",
+    loadingBody: buildLoadingBody()
+  });
 
-  assert.match(script, /import\s*\{\s*renderSafeMarkdown\s*\}\s*from\s*"\.\/markdown-render-utils\.mjs";/);
-  assert.match(script, /function renderSynthesisContent\(content = ""\) \{/);
-  assert.match(script, /return `<div class="ai-card-body markdown-content">\$\{renderSafeMarkdown\(content \|\| ""\)\}<\/div>`;/);
-  assert.match(script, /catch \{\s*return `<div class="ai-card-body">\$\{escapeHtml\(content \|\| ""\)\}<\/div>`;/s);
+  assert.match(html, /class="ai-card-body markdown-content"/);
+  assert.match(html, /<h1>Final answer<\/h1>/);
+  assert.match(html, /<strong>bold<\/strong>/);
 });
 
-test("script only uses markdown rendering for synthesis messages", async () => {
-  const script = await readScript();
+test("renders non-synthesis assistant content as escaped plain text", () => {
+  const html = renderAssistantMessageContent({
+    content: "# Final answer <script>alert(1)</script> **bold**",
+    isLoading: false,
+    kind: "assistant",
+    loadingBody: buildLoadingBody()
+  });
 
-  assert.match(
-    script,
-    /const contentBody =\s*item\.content \|\| !item\.isLoading\s*\? item\.kind === "synthesis"\s*\? renderSynthesisContent\(item\.content \|\| ""\)\s*:\s*`<div class="ai-card-body">\$\{escapeHtml\(item\.content \|\| ""\)\}<\/div>`\s*:\s*loadingBody;/s
-  );
+  assert.doesNotMatch(html, /markdown-content/);
+  assert.match(html, /class="ai-card-body"/);
+  assert.match(html, /# Final answer &lt;script&gt;alert\(1\)&lt;\/script&gt; \*\*bold\*\*/);
+  assert.doesNotMatch(html, /<strong>bold<\/strong>/);
 });

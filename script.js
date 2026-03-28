@@ -10,7 +10,7 @@ import {
   buildSynthesisPayload,
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
-import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+import { escapeHtml, renderAssistantMessageContent } from "./script-rendering-utils.mjs";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -868,23 +868,6 @@ function t(path, vars = {}) {
     (acc, [key, value]) => acc.replaceAll(`{${key}}`, String(value)),
     raw
   );
-}
-
-function escapeHtml(value = "") {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function renderSynthesisContent(content = "") {
-  try {
-    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
-  } catch {
-    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
-  }
 }
 
 function sleep(ms) {
@@ -2397,12 +2380,12 @@ function renderMessageStream() {
             </details>
           `
           : "";
-      const contentBody =
-        item.content || !item.isLoading
-          ? item.kind === "synthesis"
-            ? renderSynthesisContent(item.content || "")
-            : `<div class="ai-card-body">${escapeHtml(item.content || "")}</div>`
-          : loadingBody;
+      const contentBody = renderAssistantMessageContent({
+        content: item.content || "",
+        isLoading: item.isLoading,
+        kind: item.kind || "",
+        loadingBody
+      });
 
       return `
         <div class="message-row assistant">

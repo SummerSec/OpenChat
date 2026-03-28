@@ -49,7 +49,11 @@ test("suppresses unsafe and malformed links to plain text labels", () => {
   const malformedLink = renderSafeMarkdown("Use [broken](notaurl) safely.", {
     linkLabelPrefix: ""
   });
+  const unclosedLink = renderSafeMarkdown("Bad [link](https://example.com", {
+    linkLabelPrefix: ""
+  });
 
   assert.equal(javascriptLink, "<p>Read this now.</p>");
   assert.equal(malformedLink, "<p>Use broken safely.</p>");
+  assert.equal(unclosedLink, "<p>Bad link</p>");
 });

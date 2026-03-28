@@ -24,6 +24,28 @@ function isSafeUrl(value) {
   }
 }
 
+function isSeparatorCharacter(char) {
+  return /[\p{P}\p{S}]/u.test(char);
+}
+
+function recoverMalformedLinkSuffix(hrefText) {
+  const trailingTextStart = hrefText.search(/\s/);
+
+  if (trailingTextStart !== -1) {
+    let suffixStart = trailingTextStart;
+    while (suffixStart > 0 && isSeparatorCharacter(hrefText[suffixStart - 1])) {
+      suffixStart -= 1;
+    }
+
+    let suffix = hrefText.slice(suffixStart);
+    suffix = suffix.replace(/^[)\]}]+/, "");
+    return suffix;
+  }
+
+  const trailingSeparatorMatch = hrefText.match(/[\p{P}\p{S}]+$/u);
+  return trailingSeparatorMatch ? trailingSeparatorMatch[0] : "";
+}
+
 function renderInline(text) {
   const placeholders = [];
 
@@ -82,18 +104,8 @@ function replaceMarkdownLinks(text, store) {
 
     if (depth !== 0) {
       output += store(text.slice(labelStart + 1, labelEnd));
-      const trailingText = text.slice(labelEnd + 2);
-      const trailingTextStart = trailingText.search(/\s/);
-
-      if (trailingTextStart === -1) {
-        const trailingPunctuation = trailingText.match(/[.,!?;:]+$/);
-        if (trailingPunctuation) {
-          output += trailingPunctuation[0];
-        }
-        index = text.length;
-      } else {
-        index = labelEnd + 2 + trailingTextStart;
-      }
+      output += recoverMalformedLinkSuffix(text.slice(labelEnd + 2));
+      index = text.length;
       continue;
     }
 

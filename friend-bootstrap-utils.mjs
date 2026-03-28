@@ -20,6 +20,10 @@ export function syncDefaultFriendsWithModels(existingFriends = [], models = [], 
   const existingIds = new Set(nextFriends.map((friend) => friend.id));
 
   models.forEach((model) => {
+    if (typeof model?.id !== "string" || !model.id) {
+      return;
+    }
+
     const defaultFriend = createDefaultFriendFromModel(model, getDefaultFriendSystemPrompt);
     if (!existingIds.has(defaultFriend.id)) {
       nextFriends.push(defaultFriend);

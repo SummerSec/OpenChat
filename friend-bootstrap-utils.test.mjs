@@ -49,6 +49,29 @@ test("syncDefaultFriendsWithModels adds a default friend for each missing model"
   });
 });
 
+test("syncDefaultFriendsWithModels skips invalid models without ids", () => {
+  const models = [
+    { name: "Missing Id", avatar: "", description: "Ignored" },
+    { id: "claude", name: "Claude", avatar: "", description: "B" }
+  ];
+
+  const result = syncDefaultFriendsWithModels([], models, {
+    getDefaultFriendSystemPrompt: (name) => `default:${name}`
+  });
+
+  assert.deepEqual(result, [
+    {
+      id: "friend-claude",
+      name: "Claude",
+      avatar: "",
+      modelConfigId: "claude",
+      systemPrompt: "default:Claude",
+      enabled: true,
+      description: "B"
+    }
+  ]);
+});
+
 test("getMissingDefaultFriendModelIds reports models without a default friend", () => {
   const models = [
     { id: "chatgpt", name: "ChatGPT", enabled: true },

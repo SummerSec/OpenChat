@@ -72,6 +72,33 @@ test("syncDefaultFriendsWithModels skips invalid models without ids", () => {
   ]);
 });
 
+test("syncDefaultFriendsWithModels preserves manual friends while backfilling model defaults", () => {
+  const models = [
+    { id: "chatgpt", name: "ChatGPT", avatar: "", description: "A" },
+    { id: "claude", name: "Claude", avatar: "", description: "B" }
+  ];
+  const friends = [
+    {
+      id: "custom-mentor",
+      name: "Mentor",
+      avatar: "",
+      modelConfigId: "chatgpt",
+      systemPrompt: "mentor prompt",
+      enabled: true,
+      description: "manual"
+    }
+  ];
+
+  const result = syncDefaultFriendsWithModels(friends, models, {
+    getDefaultFriendSystemPrompt: (name) => `default:${name}`
+  });
+
+  assert.equal(result.length, 3);
+  assert.equal(result[0].id, "custom-mentor");
+  assert.equal(result[1].id, "friend-chatgpt");
+  assert.equal(result[2].id, "friend-claude");
+});
+
 test("getMissingDefaultFriendModelIds reports models without a default friend", () => {
   const models = [
     { id: "chatgpt", name: "ChatGPT", enabled: true },
@@ -94,6 +121,16 @@ test("getUsableFriendIds only returns enabled friends bound to enabled models", 
     { id: "friend-claude", modelConfigId: "claude", enabled: true },
     { id: "friend-orphan", modelConfigId: "missing", enabled: true },
     { id: "friend-off", modelConfigId: "chatgpt", enabled: false }
+  ];
+
+  assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
+});
+
+test("getUsableFriendIds ignores enabled friends whose models are missing", () => {
+  const models = [{ id: "chatgpt", enabled: true }];
+  const friends = [
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true },
+    { id: "friend-stale", modelConfigId: "claude", enabled: true }
   ];
 
   assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);

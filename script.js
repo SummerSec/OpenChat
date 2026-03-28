@@ -11,7 +11,12 @@ import {
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
-import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
+import {
+  getMissingDefaultFriendModelIds,
+  getUsableFriendIds,
+  shouldBootstrapDefaultFriends,
+  syncDefaultFriendsWithModels
+} from "./friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
 
 const STORAGE_KEYS = {
@@ -658,13 +663,13 @@ let frontendAccessBlocked = false;
 let modelTestState = {};
 writeJson(STORAGE_KEYS.account, getScopedAccount());
 let modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, cloneDefaultModels()));
-let friendProfiles = normalizeFriendProfiles(
+let friendProfiles = getSyncedFriendProfiles(
   readScopedJson(STORAGE_KEYS.friends, createDefaultFriendProfiles(modelConfigs)),
   modelConfigs
 );
 let defaultGroupSettings = normalizeGroupSettings(
   readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
-  friendProfiles
+  getUsableFriends(friendProfiles, modelConfigs)
 );
 let currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
 let draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
@@ -748,6 +753,41 @@ function normalizeFriendProfiles(items = [], models = modelConfigs) {
   return items.map((item) => normalizeFriendProfile(item, models));
 }
 
+function getSyncedFriendProfiles(items = [], models = modelConfigs) {
+  const normalizedFriends = normalizeFriendProfiles(items, models);
+  if (!getMissingDefaultFriendModelIds(normalizedFriends, models).length) {
+    return normalizedFriends;
+  }
+  return normalizeFriendProfiles(
+    syncDefaultFriendsWithModels(normalizedFriends, models, {
+      getDefaultFriendSystemPrompt
+    }),
+    models
+  );
+}
+
+function enrichFriendWithModel(friend, models = modelConfigs) {
+  const model = getModelConfigById(friend.modelConfigId, models);
+  return {
+    ...friend,
+    modelConfigName: model?.name || "",
+    provider: model?.provider || "",
+    model: model?.model || "",
+    baseUrl: model?.baseUrl || "",
+    apiKey: model?.apiKey || "",
+    thinkingEnabled: Boolean(model?.thinkingEnabled),
+    modelAvatar: model?.avatar || ""
+  };
+}
+
+function getUsableFriends(items = friendProfiles, models = modelConfigs) {
+  const normalizedFriends = normalizeFriendProfiles(items, models);
+  const usableIds = new Set(getUsableFriendIds(normalizedFriends, models));
+  return normalizedFriends
+    .filter((friend) => usableIds.has(friend.id))
+    .map((friend) => enrichFriendWithModel(friend, models));
+}
+
 function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
   const enabledIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
   let memberIds = Array.isArray(settings.memberIds)
@@ -810,13 +850,14 @@ function getEnabledFriends(items = friendProfiles) {
 }
 
 function reconcileGroupStates() {
-  friendProfiles = normalizeFriendProfiles(friendProfiles, modelConfigs);
-  defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, friendProfiles);
+  friendProfiles = getSyncedFriendProfiles(friendProfiles, modelConfigs);
+  const usableFriends = getUsableFriends(friendProfiles, modelConfigs);
+  defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, usableFriends);
   currentConversationGroupSettings = normalizeGroupSettings(
     currentConversationGroupSettings,
-    friendProfiles
+    usableFriends
   );
-  draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+  draftGroupSettings = normalizeGroupSettings(draftGroupSettings, usableFriends);
 }
 
 function isCustomModel(item = {}) {
@@ -1077,13 +1118,13 @@ async function loadLocalModelConfigFile() {
 
 function reloadScopedLocalState() {
   modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, []));
-  friendProfiles = normalizeFriendProfiles(
+  friendProfiles = getSyncedFriendProfiles(
     readScopedJson(STORAGE_KEYS.friends, []),
     modelConfigs
   );
   defaultGroupSettings = normalizeGroupSettings(
     readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
-    friendProfiles
+    getUsableFriends(friendProfiles, modelConfigs)
   );
   currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
   draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
@@ -1260,24 +1301,10 @@ function getConversationParticipants(session = {}) {
 }
 
 function resolveConversationFriends(settings = getActiveGroupSettings()) {
-  const normalized = normalizeGroupSettings(settings, friendProfiles);
-  return normalized.memberIds
-    .map((id) => getFriendById(id))
-    .filter(Boolean)
-    .map((friend) => {
-      const model = getModelConfigById(friend.modelConfigId);
-      return {
-        ...friend,
-        modelConfigName: model?.name || "",
-        provider: model?.provider || "",
-        model: model?.model || "",
-        baseUrl: model?.baseUrl || "",
-        apiKey: model?.apiKey || "",
-        thinkingEnabled: Boolean(model?.thinkingEnabled),
-        modelAvatar: model?.avatar || ""
-      };
-    })
-    .filter((friend) => friend.modelConfigName);
+  const usableFriends = getUsableFriends(friendProfiles, modelConfigs);
+  const usableFriendMap = new Map(usableFriends.map((friend) => [friend.id, friend]));
+  const normalized = normalizeGroupSettings(settings, usableFriends);
+  return normalized.memberIds.map((id) => usableFriendMap.get(id)).filter(Boolean);
 }
 
 function getRuntimeLabel(mode) {
@@ -3043,11 +3070,14 @@ async function loadBackendState() {
       writeScopedJson(STORAGE_KEYS.models, modelConfigs);
     }
     if (Array.isArray(friendData.friends) && friendData.friends.length) {
-      friendProfiles = normalizeFriendProfiles(friendData.friends, modelConfigs);
+      friendProfiles = getSyncedFriendProfiles(friendData.friends, modelConfigs);
       writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
     }
     if (groupSettingsData.groupSettings) {
-      defaultGroupSettings = normalizeGroupSettings(groupSettingsData.groupSettings, friendProfiles);
+      defaultGroupSettings = normalizeGroupSettings(
+        groupSettingsData.groupSettings,
+        getUsableFriends(friendProfiles, modelConfigs)
+      );
       writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
       currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
       draftGroupSettings = cloneGroupSettings(defaultGroupSettings);

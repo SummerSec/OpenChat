@@ -160,3 +160,24 @@ test("getUsableFriendIds ignores enabled friends without a bound model id", () =
 
   assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
 });
+
+test("getUsableFriendIds lets group settings keep only members bound to enabled models", () => {
+  const models = [
+    { id: "chatgpt", enabled: true },
+    { id: "claude", enabled: false },
+    { id: "gemini", enabled: true }
+  ];
+  const friends = [
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true },
+    { id: "friend-claude", modelConfigId: "claude", enabled: true },
+    { id: "friend-gemini", modelConfigId: "gemini", enabled: true },
+    { id: "friend-orphan", modelConfigId: "missing", enabled: true }
+  ];
+  const groupMemberIds = ["friend-claude", "friend-chatgpt", "friend-orphan", "friend-gemini"];
+  const usableFriendIds = getUsableFriendIds(friends, models);
+
+  assert.deepEqual(
+    groupMemberIds.filter((id) => usableFriendIds.includes(id)),
+    ["friend-chatgpt", "friend-gemini"]
+  );
+});

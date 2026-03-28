@@ -61,3 +61,11 @@ test("suppresses unsafe and malformed links to plain text labels", () => {
   assert.equal(unclosedLink, "<p>Bad link</p>");
   assert.equal(unclosedLinkWithTrailingText, "<p>Bad link trailing text</p>");
 });
+
+test("preserves punctuation after an unclosed link", () => {
+  const html = renderSafeMarkdown("Bad [link](https://example.com.", {
+    linkLabelPrefix: ""
+  });
+
+  assert.equal(html, "<p>Bad link.</p>");
+});

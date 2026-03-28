@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-title-key="titles.workspace">OpenChat - Workspace</title>
+    <meta
+      name="description"
+      content="OpenChat desktop workspace for multi-model AI conversations."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="layout app-layout">
+      <aside class="sidebar workspace-sidebar" id="sidebar">
+        <section class="conversation-drawer" id="conversation-drawer">
+          <div class="conversation-panel" id="conversation-panel">
+            <div class="workspace-sidebar-top">
+              <div class="workspace-brand">
+                <div class="workspace-brand-mark">OC</div>
+                <div class="workspace-brand-copy">
+                  <strong data-i18n="home.introTitle"></strong>
+                  <p data-i18n="home.heroKicker"></p>
+                </div>
+              </div>
+              <div class="workspace-top-actions">
+                <div class="lang-switch">
+                  <button class="lang-button" data-lang="zh-CN">ZH</button>
+                  <button class="lang-button" data-lang="en">EN</button>
+                  <button
+                    class="lang-toggle"
+                    id="lang-toggle"
+                    type="button"
+                    aria-label="Switch language"
+                    data-lang="zh-CN"
+                  >
+                    <span class="lang-toggle-knob">ZH</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button class="workspace-new-chat" id="new-chat" type="button" data-i18n="home.newChat"></button>
+
+            <div class="workspace-sidebar-section">
+              <p class="sidebar-section-label" data-i18n="home.sideLabel"></p>
+              <div class="conversation-list" id="conversation-list"></div>
+            </div>
+
+            <div id="login-modal" class="login-modal" hidden>
+              <div class="login-modal-backdrop" id="login-modal-backdrop"></div>
+              <div class="login-modal-box">
+                <p class="panel-label" data-i18n="auth.titleLabel"></p>
+                <h2 data-i18n="auth.title"></h2>
+                <label class="field-label" for="modal-account-email" data-i18n="auth.email"></label>
+                <input class="text-input" id="modal-account-email" type="email" placeholder="team@example.com" />
+                <label class="field-label" for="modal-account-name" data-i18n="auth.workspaceName"></label>
+                <input class="text-input" id="modal-account-name" type="text" placeholder="Product Ops" />
+                <div id="modal-account-error" class="login-modal-error" hidden></div>
+                <button class="primary-button" id="modal-save-account" data-i18n="auth.save"></button>
+              </div>
+            </div>
+
+            <div class="user-bar" id="user-bar">
+              <div class="user-bar-menu" id="user-bar-menu" hidden>
+                <a class="user-bar-menu-item active" href="index.html">
+                  <span class="icon-grid" aria-hidden="true"></span>
+                  <span data-i18n="common.navWorkspace"></span>
+                </a>
+                <a class="user-bar-menu-item" href="settings.html">
+                  <span class="icon-sliders" aria-hidden="true"></span>
+                  <span data-i18n="common.navSettings"></span>
+                </a>
+                <a class="user-bar-menu-item" href="friends.html">
+                  <span class="icon-users" aria-hidden="true"></span>
+                  <span data-i18n="common.navFriends"></span>
+                </a>
+                <a class="user-bar-menu-item" href="auth.html">
+                  <span class="icon-user" aria-hidden="true"></span>
+                  <span data-i18n="common.navAccount"></span>
+                </a>
+                <a class="user-bar-menu-item" href="history.html">
+                  <span class="icon-clock" aria-hidden="true"></span>
+                  <span data-i18n="common.navHistory"></span>
+                </a>
+              </div>
+              <div class="user-bar-inner" id="user-bar-trigger">
+                <div class="user-bar-avatar" id="user-bar-avatar">?</div>
+                <span class="user-bar-name" id="user-bar-name" data-i18n="common.guest"></span>
+                <button class="user-bar-more" id="user-bar-more" type="button" aria-label="More">&#8943;</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat-shell">
+        <section class="chat-panel">
+          <div class="chat-header deepseek-chat-header">
+            <div class="chat-header-meta">
+              <p class="panel-label" data-i18n="home.friendsInChat"></p>
+              <strong id="selected-count"></strong>
+            </div>
+            <div class="chat-header-actions">
+              <div class="header-chips model-identities" id="selected-models"></div>
+              <div class="workspace-strip-actions">
+                <button
+                  class="ghost-button small-button"
+                  id="group-settings-toggle"
+                  type="button"
+                  data-i18n="home.groupSettings"
+                ></button>
+                <p class="panel-label" data-i18n="home.finalSynthesis"></p>
+                <select id="synth-model" class="inline-select"></select>
+                <button class="ghost-button small-button" id="reroll-synthesis" data-i18n="home.rebuild"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="workspace-stage-copy">
+            <p class="workspace-stage-kicker" data-i18n="home.heroKicker"></p>
+            <h1 class="workspace-stage-title" data-i18n="home.introTitle"></h1>
+          </div>
+
+          <section class="group-settings-panel" id="group-settings-panel" hidden>
+            <div class="group-settings-panel-head">
+              <div>
+                <p class="panel-label" data-i18n="home.groupSettings"></p>
+                <strong data-i18n="home.groupSettingsTitle"></strong>
+              </div>
+              <button
+                class="ghost-button small-button"
+                id="group-settings-close"
+                type="button"
+                data-i18n="common.close"
+              ></button>
+            </div>
+            <div class="group-settings-grid">
+              <div class="group-settings-block">
+                <label class="field-label" data-i18n="home.memberSelection"></label>
+                <div class="group-member-picker" id="group-member-picker"></div>
+              </div>
+              <div class="group-settings-block">
+                <label class="field-label" for="group-synthesis-select" data-i18n="home.synthesisFriend"></label>
+                <select id="group-synthesis-select" class="inline-select"></select>
+              </div>
+              <div class="group-settings-block">
+                <label class="group-toggle-line" for="group-shared-toggle">
+                  <input id="group-shared-toggle" type="checkbox" />
+                  <span data-i18n="home.sharedPromptToggle"></span>
+                </label>
+                <p class="settings-note" data-i18n="home.sharedPromptHint"></p>
+                <textarea
+                  id="group-shared-prompt"
+                  class="group-shared-prompt"
+                  rows="6"
+                  data-i18n-placeholder="home.sharedPromptPlaceholder"
+                ></textarea>
+              </div>
+            </div>
+            <div class="group-settings-actions">
+              <button
+                class="ghost-button"
+                id="apply-group-settings"
+                type="button"
+                data-i18n="home.applyCurrentConversation"
+              ></button>
+              <button
+                class="primary-button"
+                id="save-default-group-settings"
+                type="button"
+                data-i18n="home.saveDefaultGroup"
+              ></button>
+            </div>
+          </section>
+
+          <div class="message-stream" id="message-stream"></div>
+
+          <div class="suggestion-row compact">
+            <button class="suggestion-card" data-suggestion-index="0"></button>
+            <button class="suggestion-card" data-suggestion-index="1"></button>
+            <button class="suggestion-card" data-suggestion-index="2"></button>
+          </div>
+
+          <section class="composer-shell chat-composer">
+            <label class="sr-only" for="prompt-input">Prompt</label>
+            <textarea
+              id="prompt-input"
+              rows="4"
+              placeholder=""
+              data-i18n-placeholder="home.promptPlaceholder"
+            ></textarea>
+            <div class="composer-toolbar">
+              <div class="tool-row">
+                <span class="tool-pill" id="run-status" data-i18n="home.ready"></span>
+                <span class="tool-pill" data-i18n="home.enterHint"></span>
+              </div>
+              <div class="tool-row">
+                <button class="send-button" id="run-workflow" data-i18n="home.run"></button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

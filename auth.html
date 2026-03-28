@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-title-key="titles.account">OpenChat - Account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-rail">
+          <div class="sidebar-brand">OC</div>
+          <div class="lang-switch">
+            <button class="lang-button" data-lang="zh-CN">ZH</button>
+            <button class="lang-button" data-lang="en">EN</button>
+            <button class="lang-toggle" id="lang-toggle" type="button" aria-label="Switch language" data-lang="zh-CN">
+              <span class="lang-toggle-knob">ZH</span>
+            </button>
+          </div>
+          <a class="nav-icon" href="index.html" aria-label="Workspace">
+            <span class="icon-grid" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="settings.html" aria-label="Settings">
+            <span class="icon-sliders" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="friends.html" aria-label="Friends">
+            <span class="icon-users" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon active" href="auth.html" aria-label="Account">
+            <span class="icon-user" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="history.html" aria-label="History">
+            <span class="icon-clock" aria-hidden="true"></span>
+          </a>
+        </div>
+      </aside>
+
+      <main class="page-main">
+        <section class="page-header">
+          <p class="panel-label" data-i18n="auth.titleLabel"></p>
+          <h1 data-i18n="auth.title"></h1>
+          <p class="page-copy" data-i18n="auth.copy"></p>
+        </section>
+
+        <section class="auth-grid">
+          <article class="workspace-panel auth-card">
+            <label class="field-label" for="account-email" data-i18n="auth.email"></label>
+            <input class="text-input" id="account-email" type="email" placeholder="team@example.com" />
+            <label class="field-label" for="account-name" data-i18n="auth.workspaceName"></label>
+            <input class="text-input" id="account-name" type="text" placeholder="Product Ops" />
+            <button class="primary-button" id="save-account" data-i18n="auth.save"></button>
+          </article>
+
+          <article class="workspace-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-label" data-i18n="auth.status"></p>
+                <h2 data-i18n="auth.current"></h2>
+              </div>
+            </div>
+            <div class="account-summary" id="account-summary"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

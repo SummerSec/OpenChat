@@ -1,0 +1,16 @@
+{
+  "name": "multiplechat-open-source",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node server.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.mjs"
+  },
+  "devDependencies": {
+    "vite": "^7.1.3"
+  }
+}

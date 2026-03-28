@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-title-key="titles.settings">OpenChat - Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-rail">
+          <div class="sidebar-brand">OC</div>
+          <div class="lang-switch">
+            <button class="lang-button" data-lang="zh-CN">ZH</button>
+            <button class="lang-button" data-lang="en">EN</button>
+            <button class="lang-toggle" id="lang-toggle" type="button" aria-label="Switch language" data-lang="zh-CN">
+              <span class="lang-toggle-knob">ZH</span>
+            </button>
+          </div>
+          <a class="nav-icon" href="index.html" aria-label="Workspace">
+            <span class="icon-grid" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon active" href="settings.html" aria-label="Settings">
+            <span class="icon-sliders" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="friends.html" aria-label="Friends">
+            <span class="icon-users" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="auth.html" aria-label="Account">
+            <span class="icon-user" aria-hidden="true"></span>
+          </a>
+          <a class="nav-icon" href="history.html" aria-label="History">
+            <span class="icon-clock" aria-hidden="true"></span>
+          </a>
+        </div>
+      </aside>
+
+      <main class="page-main">
+        <section class="page-header">
+          <p class="panel-label" data-i18n="settings.titleLabel"></p>
+          <h1 data-i18n="settings.title"></h1>
+          <p class="page-copy" data-i18n="settings.copy"></p>
+        </section>
+
+        <section class="settings-grid-top">
+          <article class="workspace-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-label" data-i18n="settings.runtimeLabel"></p>
+                <h2 data-i18n="settings.runtimeTitle"></h2>
+              </div>
+            </div>
+            <div class="mode-stack" id="runtime-mode-toggle">
+              <button class="mode-card active" data-runtime="frontend" data-i18n="settings.frontendMode"></button>
+              <button class="mode-card" data-runtime="backend" data-i18n="settings.backendMode"></button>
+            </div>
+            <p class="settings-note" id="runtime-description"></p>
+          </article>
+
+          <article class="workspace-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-label" data-i18n="settings.routingLabel"></p>
+                <h2 data-i18n="settings.routingTitle"></h2>
+              </div>
+              <span class="count-badge" id="model-count"></span>
+            </div>
+            <div class="model-toggle-grid" id="model-toggle-grid"></div>
+          </article>
+        </section>
+
+        <section class="workspace-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label" data-i18n="settings.modelLabel"></p>
+              <h2 data-i18n="settings.modelTitle"></h2>
+            </div>
+            <button class="ghost-button" id="add-custom-model" data-i18n="settings.addModel"></button>
+          </div>
+          <div class="config-grid" id="config-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

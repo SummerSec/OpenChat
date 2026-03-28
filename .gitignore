@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.data/
+.playwright-cli/
+output/
+server.out
+server.err
+workspace-home.png
+*.log

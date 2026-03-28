@@ -120,6 +120,26 @@ npm run build
 npm run preview
 ```
 
+## Tests
+
+Run the full test suite:
+
+```bash
+npm test
+```
+
+Run a single test file:
+
+```bash
+node --test frontend-auth.test.mjs
+```
+
+Run specific tests by name:
+
+```bash
+node --test --test-name-pattern="frontend password" frontend-auth.test.mjs
+```
+
 ## Architecture
 
 ### Frontend mode
@@ -211,6 +231,6 @@ Node backend:
 
 ## Notes
 
-- No automated test suite is configured yet
+- Automated tests use the Node built-in test runner and live in repo-root `*.test.mjs` files
 - The backend uses JSON-file persistence for a lightweight MVP
 - A natural next step is replacing file storage with a database and hardening auth and provider secret handling

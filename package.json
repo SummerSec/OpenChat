@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "node server.mjs",
-    "test": "node --test frontend-auth.test.mjs mock-response-utils.test.mjs frontend-provider-utils.test.mjs model-test-utils.test.mjs synthesis-utils.test.mjs markdown-render-utils.test.mjs",
+    "test": "node --test frontend-auth.test.mjs mock-response-utils.test.mjs frontend-provider-utils.test.mjs model-test-utils.test.mjs synthesis-utils.test.mjs markdown-render-utils.test.mjs script-rendering.test.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.mjs"

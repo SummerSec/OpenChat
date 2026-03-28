@@ -5,6 +5,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { getUsableFriendIds, syncDefaultFriendsWithModels } from "./friend-bootstrap-utils.mjs";
 import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./mock-response-utils.mjs";
 import { buildFallbackSynthesis, buildSynthesisPromptText } from "./synthesis-utils.mjs";
 
@@ -97,8 +98,8 @@ function createDefaultFriends(models = cloneDefaultModels(), language = "zh-CN")
   }));
 }
 
-function createDefaultGroupSettings(friends = []) {
-  const memberIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
+function createDefaultGroupSettings(friends = [], models = []) {
+  const memberIds = getUsableFriendIds(friends, models);
   return {
     memberIds,
     sharedSystemPromptEnabled: false,
@@ -113,13 +114,13 @@ function normalizeBaseUrl(url) {
   return String(url || "").replace(/\/+$/, "");
 }
 
-function normalizeGroupSettings(settings = {}, friends = []) {
-  const enabledIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
+function normalizeGroupSettings(settings = {}, friends = [], models = []) {
+  const usableFriendIds = getUsableFriendIds(friends, models);
   let memberIds = Array.isArray(settings.memberIds)
-    ? settings.memberIds.filter((id) => enabledIds.includes(id))
-    : [...enabledIds];
-  if (!memberIds.length && enabledIds.length) {
-    memberIds = [enabledIds[0]];
+    ? settings.memberIds.filter((id) => usableFriendIds.includes(id))
+    : [...usableFriendIds];
+  if (!memberIds.length && usableFriendIds.length) {
+    memberIds = [usableFriendIds[0]];
   }
   return {
     memberIds,
@@ -160,12 +161,20 @@ async function readDb() {
   if (!Array.isArray(db.friends) || !db.friends.length) {
     db.friends = createDefaultFriends(db.models);
     changed = true;
+  } else {
+    const syncedFriends = syncDefaultFriendsWithModels(db.friends, db.models, {
+      getDefaultFriendSystemPrompt
+    });
+    if (JSON.stringify(syncedFriends) !== JSON.stringify(db.friends)) {
+      db.friends = syncedFriends;
+      changed = true;
+    }
   }
   if (!db.groupSettings || typeof db.groupSettings !== "object") {
-    db.groupSettings = createDefaultGroupSettings(db.friends);
+    db.groupSettings = createDefaultGroupSettings(db.friends, db.models);
     changed = true;
   } else {
-    const normalized = normalizeGroupSettings(db.groupSettings, db.friends);
+    const normalized = normalizeGroupSettings(db.groupSettings, db.friends, db.models);
     if (JSON.stringify(normalized) !== JSON.stringify(db.groupSettings)) {
       db.groupSettings = normalized;
       changed = true;
@@ -623,8 +632,9 @@ function resolveRunPayload(body = {}, db = {}) {
     .filter((friend) => friend.modelConfigName);
 
   const groupSettings = normalizeGroupSettings(
-    body.groupSettings || createDefaultGroupSettings(normalizedFriends),
-    normalizedFriends
+    body.groupSettings || createDefaultGroupSettings(normalizedFriends, models),
+    normalizedFriends,
+    models
   );
   const runFriends = groupSettings.memberIds
     .map((id) => normalizedFriends.find((friend) => friend.id === id))
@@ -829,14 +839,14 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/group-settings" && req.method === "GET") {
     const db = await readDb();
-    sendJson(res, 200, { groupSettings: db.groupSettings || createDefaultGroupSettings(db.friends || []) });
+    sendJson(res, 200, { groupSettings: db.groupSettings || createDefaultGroupSettings(db.friends || [], db.models || []) });
     return true;
   }
 
   if (url.pathname === "/api/group-settings" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.groupSettings = normalizeGroupSettings(body.groupSettings || {}, db.friends || []);
+    db.groupSettings = normalizeGroupSettings(body.groupSettings || {}, db.friends || [], db.models || []);
     await writeDb(db);
     sendJson(res, 200, { groupSettings: db.groupSettings });
     return true;

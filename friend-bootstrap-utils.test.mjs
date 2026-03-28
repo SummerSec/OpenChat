@@ -151,6 +151,24 @@ test("getUsableFriendIds ignores enabled friends whose models are missing", () =
   assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
 });
 
+test("getUsableFriendIds excludes stale bindings before backend group normalization", () => {
+  const models = [
+    { id: "chatgpt", enabled: true },
+    { id: "gemini", enabled: true }
+  ];
+  const friends = [
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true },
+    { id: "friend-stale", modelConfigId: "claude", enabled: true },
+    { id: "friend-gemini", modelConfigId: "gemini", enabled: true }
+  ];
+  const usableFriendIds = getUsableFriendIds(friends, models);
+
+  assert.deepEqual(
+    ["friend-stale", "friend-chatgpt", "friend-gemini"].filter((id) => usableFriendIds.includes(id)),
+    ["friend-chatgpt", "friend-gemini"]
+  );
+});
+
 test("getUsableFriendIds ignores enabled friends without a bound model id", () => {
   const models = [{ id: "chatgpt", enabled: true }];
   const friends = [
@@ -180,4 +198,15 @@ test("getUsableFriendIds lets group settings keep only members bound to enabled 
     groupMemberIds.filter((id) => usableFriendIds.includes(id)),
     ["friend-chatgpt", "friend-gemini"]
   );
+});
+
+test("getUsableFriendIds excludes friends without usable ids for backend group normalization", () => {
+  const models = [{ id: "chatgpt", enabled: true }];
+  const friends = [
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true },
+    { id: "", modelConfigId: "chatgpt", enabled: true },
+    { id: null, modelConfigId: "chatgpt", enabled: true }
+  ];
+
+  assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
 });

@@ -48,6 +48,7 @@ export function getUsableFriendIds(friends = [], models = []) {
 
   return (Array.isArray(friends) ? friends : [])
     .filter((friend) => friend?.enabled !== false)
+    .filter((friend) => typeof friend?.id === "string" && friend.id)
     .filter((friend) => typeof friend?.modelConfigId === "string" && friend.modelConfigId)
     .filter((friend) => enabledModelIds.has(friend.modelConfigId))
     .map((friend) => friend.id);

@@ -359,7 +359,7 @@ async function runAiSearchHub(platform, prompt) {
   return String(await readFile(outputPath, "utf8")).trim();
 }
 
-async function callOpenAICompatible(model, prompt, systemPrompt = "") {
+async function callOpenAICompatible(model, prompt, systemPrompt = "", options = {}) {
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
@@ -373,7 +373,8 @@ async function callOpenAICompatible(model, prompt, systemPrompt = "") {
     },
     body: JSON.stringify({
       model: model.model,
-      messages
+      messages,
+      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
     })
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -394,7 +395,7 @@ async function callOpenAICompatible(model, prompt, systemPrompt = "") {
   return { content: content.trim(), thinking: thinking.trim() };
 }
 
-async function callAnthropic(model, prompt, systemPrompt = "") {
+async function callAnthropic(model, prompt, systemPrompt = "", options = {}) {
   const response = await fetch(`${normalizeBaseUrl(model.baseUrl)}/messages`, {
     method: "POST",
     headers: {
@@ -406,6 +407,7 @@ async function callAnthropic(model, prompt, systemPrompt = "") {
       model: model.model,
       max_tokens: 1200,
       system: systemPrompt || undefined,
+      ...(options.thinkingEnabled ? { thinking: { type: "enabled", budget_tokens: 1024 } } : {}),
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -428,7 +430,8 @@ async function callAnthropic(model, prompt, systemPrompt = "") {
   };
 }
 
-async function callGemini(model, prompt, systemPrompt = "") {
+async function callGemini(model, prompt, systemPrompt = "", options = {}) {
+  void options;
   const response = await fetch(
     `${normalizeBaseUrl(model.baseUrl)}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
     {
@@ -517,11 +520,17 @@ async function generateFriendResponse(friend, prompt, language) {
     const provider = String(model.provider || "").toLowerCase();
     let output = { content: "", thinking: "" };
     if (provider.includes("anthropic") || model.name.toLowerCase().includes("claude")) {
-      output = await callAnthropic(model, prompt, friend.systemPrompt || "");
+      output = await callAnthropic(model, prompt, friend.systemPrompt || "", {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     } else if (provider.includes("google") || model.name.toLowerCase().includes("gemini")) {
-      output = await callGemini(model, prompt, friend.systemPrompt || "");
+      output = await callGemini(model, prompt, friend.systemPrompt || "", {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     } else {
-      output = await callOpenAICompatible(model, prompt, friend.systemPrompt || "");
+      output = await callOpenAICompatible(model, prompt, friend.systemPrompt || "", {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     }
 
     return {
@@ -540,7 +549,7 @@ async function generateFriendResponse(friend, prompt, language) {
         ? "实时结果"
         : "live",
       content: output.content || mockResponseFor(friend, prompt, language),
-      thinking: output.thinking || ""
+      thinking: friend.thinkingEnabled ? output.thinking || "" : ""
     };
   } catch (error) {
     return {
@@ -623,6 +632,7 @@ function resolveRunPayload(body = {}, db = {}) {
     .map((friend) => ({
       ...friend,
       preferredPlatform: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform : "",
+      thinkingEnabled: Boolean(friend.thinkingEnabled),
       systemPrompt: groupSettings.sharedSystemPromptEnabled
         ? `${String(groupSettings.sharedSystemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
         : `${String(friend.systemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
@@ -678,6 +688,7 @@ function buildConversationRecord({
       modelConfigName: item.modelConfigName,
       provider: item.provider,
       model: item.model,
+      thinkingEnabled: Boolean(item.thinkingEnabled),
       systemPrompt: item.systemPrompt || "",
       enabled: true,
       description: ""
@@ -706,9 +717,10 @@ function buildConversationRecord({
         modelConfigId: item.modelConfigId,
         modelConfigName: item.modelConfigName,
         provider: item.provider,
-        model: item.model,
-        source: item.source,
-        content: item.content,
+      model: item.model,
+      thinkingEnabled: Boolean(item.thinkingEnabled),
+      source: item.source,
+      content: item.content,
         thinking: item.thinking || "",
         createdAt: now,
         error: item.error || ""

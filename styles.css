@@ -1422,7 +1422,7 @@ body.frontend-access-locked #frontend-password-modal {
   align-items: center;
   gap: 10px;
   color: var(--caption);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
 }
 
 .message-head-user {
@@ -1461,12 +1461,13 @@ body.frontend-access-locked #frontend-password-modal {
 
 .message-bubble {
   max-width: min(760px, 82%);
-  padding: 15px 19px;
+  padding: 13px 17px;
   border-radius: 22px;
   border-bottom-right-radius: 8px;
   background: linear-gradient(135deg, var(--blue-deep) 0%, #6f90ff 100%);
   color: #fff;
-  line-height: 1.72;
+  line-height: 1.64;
+  font-size: 0.93rem;
   white-space: pre-wrap;
   box-shadow: 0 20px 40px rgba(77, 107, 254, 0.2);
   overflow-wrap: anywhere;
@@ -1480,6 +1481,27 @@ body.frontend-access-locked #frontend-password-modal {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(251, 252, 255, 0.98) 100%);
   box-shadow: 0 18px 42px rgba(17, 24, 39, 0.08);
   overflow: hidden;
+}
+
+.ai-card-sections {
+  display: grid;
+}
+
+.ai-card-section {
+  padding: 12px 16px 16px;
+}
+
+.ai-card-section + .ai-card-section {
+  border-top: 1px solid rgba(230, 235, 244, 0.9);
+}
+
+.ai-card-section-label {
+  margin: 0 0 10px;
+  color: var(--caption);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .synthesis-card {
@@ -1514,7 +1536,7 @@ body.frontend-access-locked #frontend-password-modal {
 
 .ai-card-name {
   font-weight: 700;
-  font-size: 0.96rem;
+  font-size: 0.9rem;
 }
 
 .ai-card-role {
@@ -1525,7 +1547,7 @@ body.frontend-access-locked #frontend-password-modal {
   border-radius: 999px;
   background: var(--blue-soft);
   color: var(--blue);
-  font-size: 0.74rem;
+  font-size: 0.69rem;
   font-weight: 700;
 }
 
@@ -1536,7 +1558,7 @@ body.frontend-access-locked #frontend-password-modal {
 
 .ai-card-meta {
   margin-top: 4px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
 }
 
 .synthesis-badge {
@@ -1552,9 +1574,10 @@ body.frontend-access-locked #frontend-password-modal {
 }
 
 .ai-card-body {
-  padding: 18px 18px 20px;
+  padding: 0;
   color: var(--text);
-  line-height: 1.78;
+  line-height: 1.66;
+  font-size: 0.9rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1761,7 +1784,8 @@ body.frontend-access-locked #frontend-password-modal {
 }
 
 .think-block {
-  border-bottom: 1px solid #eef2f8;
+  border: 1px solid #eef2f8;
+  border-radius: 14px;
   background: #f8fbff;
 }
 
@@ -1770,9 +1794,9 @@ body.frontend-access-locked #frontend-password-modal {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 9px 13px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -1792,11 +1816,29 @@ body.frontend-access-locked #frontend-password-modal {
 }
 
 .think-content {
-  padding: 0 16px 14px;
+  padding: 0 13px 12px;
   color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.7;
+  font-size: 0.79rem;
+  line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.think-empty-state {
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: var(--caption);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.field-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
 }
 
 .suggestion-row {

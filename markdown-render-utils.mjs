@@ -28,7 +28,8 @@ function isSeparatorCharacter(char) {
   return /[\p{P}\p{S}]/u.test(char);
 }
 
-function recoverMalformedLinkSuffix(hrefText) {
+function findMalformedLinkRecoveryIndex(text, hrefStart) {
+  const hrefText = text.slice(hrefStart);
   const trailingTextStart = hrefText.search(/\s/);
 
   if (trailingTextStart !== -1) {
@@ -37,13 +38,18 @@ function recoverMalformedLinkSuffix(hrefText) {
       suffixStart -= 1;
     }
 
-    let suffix = hrefText.slice(suffixStart);
-    suffix = suffix.replace(/^[)\]}]+/, "");
-    return suffix;
+    while (hrefText[suffixStart] === ")" || hrefText[suffixStart] === "]" || hrefText[suffixStart] === "}") {
+      suffixStart += 1;
+    }
+    return hrefStart + suffixStart;
   }
 
   const trailingSeparatorMatch = hrefText.match(/[\p{P}\p{S}]+$/u);
-  return trailingSeparatorMatch ? trailingSeparatorMatch[0] : "";
+  if (!trailingSeparatorMatch) {
+    return text.length;
+  }
+
+  return text.length - trailingSeparatorMatch[0].length;
 }
 
 function renderInline(text) {
@@ -104,8 +110,7 @@ function replaceMarkdownLinks(text, store) {
 
     if (depth !== 0) {
       output += store(text.slice(labelStart + 1, labelEnd));
-      output += recoverMalformedLinkSuffix(text.slice(labelEnd + 2));
-      index = text.length;
+      index = findMalformedLinkRecoveryIndex(text, labelEnd + 2);
       continue;
     }
 

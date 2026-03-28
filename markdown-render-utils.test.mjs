@@ -77,3 +77,17 @@ test("preserves punctuation and later text after an unclosed link", () => {
 
   assert.equal(html, "<p>Bad link, then more</p>");
 });
+
+test("continues parsing later valid markdown after an unclosed link", () => {
+  const html = renderSafeMarkdown(
+    "Bad [link](https://example.com and [docs](https://example.org) with **bold** text",
+    {
+      linkLabelPrefix: ""
+    }
+  );
+
+  assert.equal(
+    html,
+    "<p>Bad link and <a href=\"https://example.org\" target=\"_blank\" rel=\"noopener noreferrer\">docs</a> with <strong>bold</strong> text</p>"
+  );
+});

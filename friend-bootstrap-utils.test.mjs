@@ -135,3 +135,13 @@ test("getUsableFriendIds ignores enabled friends whose models are missing", () =
 
   assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
 });
+
+test("getUsableFriendIds ignores enabled friends without a bound model id", () => {
+  const models = [{ id: "chatgpt", enabled: true }];
+  const friends = [
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true },
+    { id: "friend-unbound", modelConfigId: "", enabled: true }
+  ];
+
+  assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
+});

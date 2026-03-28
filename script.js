@@ -742,7 +742,7 @@ function normalizeFriendProfile(item = {}, models = modelConfigs) {
     id: item.id || `friend-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: item.name || (currentLanguage === "zh-CN" ? "\u7fa4\u53cb" : "Friend"),
     avatar: item.avatar || "",
-    modelConfigId: item.modelConfigId || models[0]?.id || "",
+    modelConfigId: typeof item.modelConfigId === "string" ? item.modelConfigId : "",
     systemPrompt: String(item.systemPrompt || getDefaultFriendSystemPrompt(item.name || "")),
     enabled: item.enabled !== false,
     description: String(item.description || "")
@@ -1236,7 +1236,7 @@ function createFriendProfile() {
 }
 
 function getActiveGroupSettings() {
-  return normalizeGroupSettings(currentConversationGroupSettings, friendProfiles);
+  return normalizeGroupSettings(currentConversationGroupSettings, getUsableFriends(friendProfiles, modelConfigs));
 }
 
 function getFriendModelLabel(friend) {
@@ -2173,15 +2173,15 @@ function renderGroupSettingsPanel() {
   groupSettingsPanel.hidden = !isGroupSettingsOpen;
   if (!isGroupSettingsOpen) return;
 
-  draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+  const usableFriends = getUsableFriends(friendProfiles, modelConfigs);
+  draftGroupSettings = normalizeGroupSettings(draftGroupSettings, usableFriends);
 
   if (groupMemberPicker) {
-    const availableFriends = getEnabledFriends();
+    const availableFriends = usableFriends;
     groupMemberPicker.innerHTML = availableFriends.length
       ? availableFriends
           .map((friend) => {
             const checked = draftGroupSettings.memberIds.includes(friend.id);
-            const model = getModelConfigById(friend.modelConfigId);
             return `
               <label class="group-member-option">
                 <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${
@@ -2190,14 +2190,14 @@ function renderGroupSettingsPanel() {
                 <span class="conversation-icon">
                   ${renderProviderIcon(
                     friend.name,
-                    model?.provider || "",
+                    friend.provider || "",
                     friend.name.slice(0, 2).toUpperCase(),
-                    friend.avatar || model?.avatar || ""
+                    friend.avatar || friend.modelAvatar || ""
                   )}
                 </span>
                 <span class="group-member-copy">
                   <strong>${escapeHtml(friend.name)}</strong>
-                  <span>${escapeHtml(model?.name || "")}</span>
+                  <span>${escapeHtml(friend.modelConfigName || "")}</span>
                 </span>
               </label>
             `;
@@ -2769,7 +2769,10 @@ function bootstrapDefaultFriendsIfMissing() {
   if (shouldBootstrapDefaultFriends(localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.friends)), modelConfigs)) {
     friendProfiles = createDefaultFriendProfiles(modelConfigs);
     saveFriendProfiles();
-    defaultGroupSettings = normalizeGroupSettings(createDefaultGroupSettings(friendProfiles), friendProfiles);
+    defaultGroupSettings = normalizeGroupSettings(
+      createDefaultGroupSettings(friendProfiles),
+      getUsableFriends(friendProfiles, modelConfigs)
+    );
     saveDefaultGroupSettings();
     currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
     draftGroupSettings = cloneGroupSettings(defaultGroupSettings);
@@ -3086,9 +3089,10 @@ async function loadBackendState() {
       saveHistoryItems(conversationData.conversations);
     }
     reconcileGroupStates();
-    defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, friendProfiles);
-    currentConversationGroupSettings = normalizeGroupSettings(currentConversationGroupSettings, friendProfiles);
-    draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+    const usableFriends = getUsableFriends(friendProfiles, modelConfigs);
+    defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, usableFriends);
+    currentConversationGroupSettings = normalizeGroupSettings(currentConversationGroupSettings, usableFriends);
+    draftGroupSettings = normalizeGroupSettings(draftGroupSettings, usableFriends);
     if (activeConversationId) {
       const nextIndex = findHistoryIndexById(activeConversationId);
       if (nextIndex >= 0) {
@@ -3533,7 +3537,7 @@ function bindWorkspaceEvents() {
     } else {
       draftGroupSettings.memberIds = draftGroupSettings.memberIds.filter((id) => id !== groupMemberId);
     }
-    draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+    draftGroupSettings = normalizeGroupSettings(draftGroupSettings, getUsableFriends(friendProfiles, modelConfigs));
     renderGroupSettingsPanel();
   });
 
@@ -3561,7 +3565,10 @@ function bindWorkspaceEvents() {
   });
 
   applyGroupSettingsButton?.addEventListener("click", () => {
-    currentConversationGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+    currentConversationGroupSettings = normalizeGroupSettings(
+      draftGroupSettings,
+      getUsableFriends(friendProfiles, modelConfigs)
+    );
     isGroupSettingsOpen = false;
     renderModelSummary();
     renderSynthesisOptions();
@@ -3570,7 +3577,10 @@ function bindWorkspaceEvents() {
   });
 
   saveDefaultGroupSettingsButton?.addEventListener("click", async () => {
-    defaultGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
+    defaultGroupSettings = normalizeGroupSettings(
+      draftGroupSettings,
+      getUsableFriends(friendProfiles, modelConfigs)
+    );
     saveDefaultGroupSettings();
     await syncGroupSettingsToBackend();
     currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);

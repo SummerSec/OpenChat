@@ -111,6 +111,21 @@ test("getMissingDefaultFriendModelIds reports models without a default friend", 
   assert.deepEqual(getMissingDefaultFriendModelIds(friends, models), ["claude"]);
 });
 
+test("getMissingDefaultFriendModelIds returns every unmapped model id for sync banners", () => {
+  const models = [
+    { id: "chatgpt", name: "ChatGPT", enabled: true },
+    { id: "claude", name: "Claude", enabled: true },
+    { id: "gemini", name: "Gemini", enabled: false },
+    { id: "", name: "Missing", enabled: true }
+  ];
+  const friends = [
+    { id: "custom-mentor", modelConfigId: "chatgpt", enabled: true },
+    { id: "friend-chatgpt", modelConfigId: "chatgpt", enabled: true }
+  ];
+
+  assert.deepEqual(getMissingDefaultFriendModelIds(friends, models), ["claude", "gemini"]);
+});
+
 test("getUsableFriendIds only returns enabled friends bound to enabled models", () => {
   const models = [
     { id: "chatgpt", enabled: true },

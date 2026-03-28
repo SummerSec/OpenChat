@@ -300,7 +300,8 @@ const I18N = {
         "\u7fa4\u53cb\u662f\u9762\u5411\u5bf9\u8bdd\u7684\u89d2\u8272\u5c42\uff0c\u6bcf\u4e2a\u7fa4\u53cb\u90fd\u53ef\u4ee5\u7ed1\u5b9a\u5e95\u5c42\u6a21\u578b\u3001\u8bbe\u7f6e\u5934\u50cf\uff0c\u5e76\u62e5\u6709\u72ec\u7acb\u7684 system prompt\u3002",
       panelLabel: "\u7fa4\u53cb\u5217\u8868",
       panelTitle: "\u53ef\u4ee5\u88ab\u62c9\u5165\u7fa4\u804a\u7684 AI \u89d2\u8272",
-      addFriend: "\u6dfb\u52a0\u7fa4\u53cb"
+      addFriend: "\u6dfb\u52a0\u7fa4\u53cb",
+      syncFriends: "\u4ece\u6a21\u578b\u540c\u6b65\u7fa4\u53cb"
     },
     common: {
       noAccount: "\u8fd8\u6ca1\u6709\u4fdd\u5b58\u672c\u5730\u8d26\u6237\u3002",
@@ -401,6 +402,17 @@ const I18N = {
       deleteFriend: "\u5220\u9664\u7fa4\u53cb",
       noFriendsTitle: "\u8fd8\u6ca1\u6709\u7fa4\u53cb",
       noFriendsCopy: "\u8bf7\u5148\u53bb\u7fa4\u53cb\u9875\u521b\u5efa AI \u7fa4\u53cb\uff0c\u518d\u62c9\u4ed6\u4eec\u8fdb\u5165\u7fa4\u804a\u3002",
+      friendGuideNoModels: "\u5148\u53bb\u8bbe\u7f6e\u9875\u542f\u7528\u6216\u6dfb\u52a0\u6a21\u578b\uff0c\u518d\u81ea\u52a8\u751f\u6210\u53ef\u8fdb\u7fa4\u804a\u7684 AI \u7fa4\u53cb\u3002",
+      friendGuideReady: "\u6d41\u7a0b\u662f\u6a21\u578b -> \u7fa4\u53cb -> \u7fa4\u804a\u3002\u5f53\u524d\u7ed1\u5b9a\u5b8c\u6574\uff0c\u53ef\u4ee5\u76f4\u63a5\u6311\u9009\u7fa4\u53cb\u8fdb\u5165\u7fa4\u804a\u3002",
+      friendGuideNeedsSync: "\u6d41\u7a0b\u662f\u6a21\u578b -> \u7fa4\u53cb -> \u7fa4\u804a\u3002\u5f53\u524d\u6709\u6a21\u578b\u5c1a\u672a\u540c\u6b65\uff0c\u6216\u6709\u7fa4\u53cb\u7ed1\u5b9a\u5931\u6548\uff0c\u5efa\u8bae\u5148\u4fee\u590d\u540e\u518d\u8fdb\u7fa4\u804a\u3002",
+      friendSyncBannerNoModels: "\u8fd8\u6ca1\u6709\u53ef\u540c\u6b65\u7684\u6a21\u578b\u3002\u5148\u5728\u8bbe\u7f6e\u9875\u6dfb\u52a0\u6216\u542f\u7528\u6a21\u578b\u3002",
+      friendSyncBannerReady: "\u7fa4\u53cb\u4e0e\u6a21\u578b\u7ed1\u5b9a\u6b63\u5e38\uff0c\u65e0\u9700\u540c\u6b65\u3002",
+      friendSyncBannerMissingModels: "\u5f85\u540c\u6b65\u6a21\u578b\uff1a{models}",
+      friendSyncBannerInvalidFriends: "\u7ed1\u5b9a\u5f02\u5e38\u7fa4\u53cb\uff1a{friends}",
+      friendSyncBannerCombined: "\u5f85\u540c\u6b65\u6a21\u578b\uff1a{models}\uff1b\u7ed1\u5b9a\u5f02\u5e38\u7fa4\u53cb\uff1a{friends}",
+      friendSyncCompleted: "\u5df2\u6839\u636e\u6a21\u578b\u540c\u6b65\u9ed8\u8ba4\u7fa4\u53cb\u5e76\u5237\u65b0\u7ed1\u5b9a\u72b6\u6001\u3002",
+      friendCardMissingModel: "\u672a\u7ed1\u5b9a\u6709\u6548\u6a21\u578b",
+      friendCardDisabledModel: "\u7ed1\u5b9a\u6a21\u578b\u5df2\u505c\u7528",
       navWorkspace: "\u5de5\u4f5c\u53f0",
       navSettings: "\u8bbe\u7f6e",
       navFriends: "\u7fa4\u53cb",
@@ -492,7 +504,8 @@ const I18N = {
         "Friends are the conversation-facing personas. Each friend binds to a model config, keeps its own avatar, and carries its own system prompt.",
       panelLabel: "Friend list",
       panelTitle: "AI personas that can join a group chat",
-      addFriend: "Add friend"
+      addFriend: "Add friend",
+      syncFriends: "Sync friends from models"
     },
     common: {
       noAccount: "No local account saved.",
@@ -589,6 +602,17 @@ const I18N = {
       deleteFriend: "Delete friend",
       noFriendsTitle: "No friends yet",
       noFriendsCopy: "Create AI friends on the Friends page first, then bring them into the group chat.",
+      friendGuideNoModels: "Start in Settings by adding or enabling models, then generate AI friends that can join group chat.",
+      friendGuideReady: "The flow is models -> friends -> group chat. Bindings look healthy, so you can move straight into group chat.",
+      friendGuideNeedsSync: "The flow is models -> friends -> group chat. Some models are not synced yet or some friend bindings are invalid, so fix those before group chat.",
+      friendSyncBannerNoModels: "No models are available to sync yet. Add or enable models in Settings first.",
+      friendSyncBannerReady: "Friend-to-model bindings look good. No sync needed.",
+      friendSyncBannerMissingModels: "Models waiting for sync: {models}",
+      friendSyncBannerInvalidFriends: "Friends with invalid bindings: {friends}",
+      friendSyncBannerCombined: "Models waiting for sync: {models}; friends with invalid bindings: {friends}",
+      friendSyncCompleted: "Default friends were synced from models and binding status was refreshed.",
+      friendCardMissingModel: "No valid model bound",
+      friendCardDisabledModel: "Bound model is disabled",
       navWorkspace: "Workspace",
       navSettings: "Settings",
       navFriends: "Friends",
@@ -618,6 +642,9 @@ const configGrid = document.getElementById("config-grid");
 const addCustomModelButton = document.getElementById("add-custom-model");
 const testEnabledModelsButton = document.getElementById("test-enabled-models");
 const friendGrid = document.getElementById("friend-grid");
+const friendGuideCopy = document.getElementById("friend-guide-copy");
+const friendSyncBanner = document.getElementById("friend-sync-banner");
+const syncFriendsFromModelsButton = document.getElementById("sync-friends-from-models");
 const addFriendButton = document.getElementById("add-friend");
 const accountEmail = document.getElementById("account-email");
 const accountName = document.getElementById("account-name");
@@ -786,6 +813,12 @@ function getUsableFriends(items = friendProfiles, models = modelConfigs) {
   return normalizedFriends
     .filter((friend) => usableIds.has(friend.id))
     .map((friend) => enrichFriendWithModel(friend, models));
+}
+
+function getInvalidFriendProfiles(items = friendProfiles, models = modelConfigs) {
+  const normalizedFriends = normalizeFriendProfiles(items, models);
+  const usableIds = new Set(getUsableFriendIds(normalizedFriends, models));
+  return normalizedFriends.filter((friend) => !usableIds.has(friend.id));
 }
 
 function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
@@ -2686,6 +2719,7 @@ function renderConfigGrid() {
 
 function renderFriendGrid() {
   if (!friendGrid) return;
+  renderFriendGuide();
   if (!friendProfiles.length) {
     friendGrid.innerHTML = `<article class="history-item"><strong>${escapeHtml(
       t("common.noFriendsTitle")
@@ -2695,6 +2729,11 @@ function renderFriendGrid() {
   friendGrid.innerHTML = friendProfiles
     .map((friend) => {
       const boundModel = getModelConfigById(friend.modelConfigId);
+      const warningText = !friend.modelConfigId || !boundModel
+        ? t("common.friendCardMissingModel")
+        : boundModel.enabled === false
+          ? t("common.friendCardDisabledModel")
+          : "";
       const selectOptions = getOrderedModelConfigs()
         .map(
           (model) =>
@@ -2704,7 +2743,7 @@ function renderFriendGrid() {
         )
         .join("");
       return `
-        <article class="config-card" data-friend-id="${escapeHtml(friend.id)}">
+        <article class="config-card ${warningText ? "friend-card-warning" : ""}" data-friend-id="${escapeHtml(friend.id)}">
           <div class="config-card-brand">
             <button
               class="config-card-icon config-card-avatar-button"
@@ -2736,6 +2775,7 @@ function renderFriendGrid() {
               <span class="friend-model-chip">${escapeHtml(boundModel?.name || "")}</span>
             </div>
           </div>
+          ${warningText ? `<p class="friend-card-warning-copy">${escapeHtml(warningText)}</p>` : ""}
           <div class="config-form">
             <label class="field-label">${escapeHtml(t("common.fieldDisplayName"))}</label>
             <input class="text-input" data-friend-field="name" value="${escapeHtml(friend.name)}" />
@@ -2761,6 +2801,58 @@ function renderFriendGrid() {
       `;
     })
     .join("");
+}
+
+function renderFriendGuide() {
+  if (friendGuideCopy) {
+    if (!modelConfigs.length) {
+      friendGuideCopy.textContent = t("common.friendGuideNoModels");
+    } else if (!getMissingDefaultFriendModelIds(friendProfiles, modelConfigs).length && !getInvalidFriendProfiles(friendProfiles, modelConfigs).length) {
+      friendGuideCopy.textContent = t("common.friendGuideReady");
+    } else {
+      friendGuideCopy.textContent = t("common.friendGuideNeedsSync");
+    }
+  }
+
+  if (!friendSyncBanner) return;
+  const missingModelIds = getMissingDefaultFriendModelIds(friendProfiles, modelConfigs);
+  const invalidFriends = getInvalidFriendProfiles(friendProfiles, modelConfigs);
+  const missingModelsLabel = missingModelIds.map((id) => getModelConfigById(id)?.name || id).join(", ");
+  const invalidFriendsLabel = invalidFriends.map((friend) => friend.name || friend.id).join(", ");
+
+  friendSyncBanner.className = "friend-sync-banner";
+  if (!modelConfigs.length) {
+    friendSyncBanner.hidden = false;
+    friendSyncBanner.classList.add("is-warning");
+    friendSyncBanner.textContent = t("common.friendSyncBannerNoModels");
+    return;
+  }
+
+  if (!missingModelIds.length && !invalidFriends.length) {
+    friendSyncBanner.hidden = false;
+    friendSyncBanner.classList.add("is-ready");
+    friendSyncBanner.textContent = t("common.friendSyncBannerReady");
+    return;
+  }
+
+  friendSyncBanner.hidden = false;
+  friendSyncBanner.classList.add("is-warning");
+  if (missingModelIds.length && invalidFriends.length) {
+    friendSyncBanner.textContent = t("common.friendSyncBannerCombined", {
+      models: missingModelsLabel,
+      friends: invalidFriendsLabel
+    });
+    return;
+  }
+  if (missingModelIds.length) {
+    friendSyncBanner.textContent = t("common.friendSyncBannerMissingModels", {
+      models: missingModelsLabel
+    });
+    return;
+  }
+  friendSyncBanner.textContent = t("common.friendSyncBannerInvalidFriends", {
+    friends: invalidFriendsLabel
+  });
 }
 
 function bootstrapDefaultFriendsIfMissing() {
@@ -3887,6 +3979,15 @@ function bindFriendEvents() {
     saveDefaultGroupSettings();
     await Promise.all([syncFriendProfilesToBackend(), syncGroupSettingsToBackend()]);
     rerenderAll();
+  });
+
+  syncFriendsFromModelsButton?.addEventListener("click", async () => {
+    friendProfiles = getSyncedFriendProfiles(friendProfiles, modelConfigs);
+    saveFriendProfiles();
+    saveDefaultGroupSettings();
+    await Promise.all([syncFriendProfilesToBackend(), syncGroupSettingsToBackend()]);
+    rerenderAll();
+    setRuntimeStatus(t("common.friendSyncCompleted"));
   });
 }
 

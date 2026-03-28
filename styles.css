@@ -331,6 +331,46 @@ a {
   margin-bottom: 18px;
 }
 
+.friend-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.friend-guide-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(77, 107, 254, 0.12);
+  background: linear-gradient(180deg, rgba(240, 245, 255, 0.88) 0%, rgba(255, 255, 255, 0.94) 100%);
+}
+
+.friend-guide-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.friend-sync-banner {
+  padding: 11px 13px;
+  border-radius: 14px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.friend-sync-banner.is-ready {
+  background: rgba(56, 161, 105, 0.1);
+  color: #23734d;
+}
+
+.friend-sync-banner.is-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a5b07;
+}
+
 .panel-header h2 {
   margin: 6px 0 0;
   font-size: 1.15rem;
@@ -1769,6 +1809,22 @@ body.frontend-access-locked #frontend-password-modal {
   color: var(--blue);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.friend-card-warning {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: linear-gradient(180deg, rgba(255, 248, 240, 0.96) 0%, rgba(255, 255, 255, 0.94) 100%);
+}
+
+.friend-card-warning-copy {
+  margin: -2px 0 14px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a5b07;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .w-72 {

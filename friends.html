@@ -75,7 +75,14 @@
               <p class="panel-label" data-i18n="friends.panelLabel"></p>
               <h2 data-i18n="friends.panelTitle"></h2>
             </div>
-            <button class="ghost-button" id="add-friend" data-i18n="friends.addFriend"></button>
+            <div class="friend-panel-actions">
+              <button class="ghost-button" id="sync-friends-from-models" data-i18n="friends.syncFriends"></button>
+              <button class="ghost-button" id="add-friend" data-i18n="friends.addFriend"></button>
+            </div>
+          </div>
+          <div class="friend-guide-panel">
+            <p class="friend-guide-copy" id="friend-guide-copy"></p>
+            <div class="friend-sync-banner" id="friend-sync-banner" hidden></div>
           </div>
           <div class="config-grid friend-grid" id="friend-grid"></div>
         </section>

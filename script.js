@@ -12,12 +12,10 @@ import {
 } from "./synthesis-utils.mjs";
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
 import {
-  getInvalidFriendProfiles,
   getMissingDefaultFriendModelIds,
   getUsableFriendIds,
   shouldBootstrapDefaultFriends,
-  syncDefaultFriendsWithModels,
-  syncFriendsStateWithModels
+  syncDefaultFriendsWithModels
 } from "./friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
 
@@ -815,6 +813,17 @@ function getUsableFriends(items = friendProfiles, models = modelConfigs) {
   return normalizedFriends
     .filter((friend) => usableIds.has(friend.id))
     .map((friend) => enrichFriendWithModel(friend, models));
+}
+
+function getInvalidFriendProfiles(items = friendProfiles, models = modelConfigs) {
+  const normalizedFriends = normalizeFriendProfiles(items, models);
+  return normalizedFriends.filter((friend) => {
+    if (typeof friend.modelConfigId !== "string" || !friend.modelConfigId) {
+      return true;
+    }
+    const model = getModelConfigById(friend.modelConfigId, models);
+    return !model || model.enabled === false;
+  });
 }
 
 function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
@@ -3978,13 +3987,8 @@ function bindFriendEvents() {
   });
 
   syncFriendsFromModelsButton?.addEventListener("click", async () => {
-    const syncedState = syncFriendsStateWithModels(friendProfiles, modelConfigs, defaultGroupSettings, {
-      getDefaultFriendSystemPrompt
-    });
-    friendProfiles = normalizeFriendProfiles(syncedState.friends, modelConfigs);
-    defaultGroupSettings = normalizeGroupSettings(syncedState.groupSettings, getUsableFriends(friendProfiles, modelConfigs));
-    currentConversationGroupSettings = normalizeGroupSettings(currentConversationGroupSettings, getUsableFriends(friendProfiles, modelConfigs));
-    draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
+    friendProfiles = getSyncedFriendProfiles(friendProfiles, modelConfigs);
+    reconcileGroupStates();
     saveFriendProfiles();
     saveDefaultGroupSettings();
     await Promise.all([syncFriendProfilesToBackend(), syncGroupSettingsToBackend()]);

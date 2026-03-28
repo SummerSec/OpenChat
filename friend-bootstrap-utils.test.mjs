@@ -2,12 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  getInvalidFriendProfiles,
   shouldBootstrapDefaultFriends,
   syncDefaultFriendsWithModels,
   getUsableFriendIds,
-  getMissingDefaultFriendModelIds,
-  syncFriendsStateWithModels
+  getMissingDefaultFriendModelIds
 } from "./friend-bootstrap-utils.mjs";
 
 test("shouldBootstrapDefaultFriends only bootstraps when no stored friends exist", () => {
@@ -161,46 +159,4 @@ test("getUsableFriendIds ignores enabled friends without a bound model id", () =
   ];
 
   assert.deepEqual(getUsableFriendIds(friends, models), ["friend-chatgpt"]);
-});
-
-test("getInvalidFriendProfiles only reports true binding problems", () => {
-  const models = [
-    { id: "chatgpt", enabled: true },
-    { id: "claude", enabled: false }
-  ];
-  const friends = [
-    { id: "friend-valid-disabled", modelConfigId: "chatgpt", enabled: false },
-    { id: "friend-disabled-model", modelConfigId: "claude", enabled: true },
-    { id: "friend-missing-model", modelConfigId: "missing", enabled: true },
-    { id: "friend-unbound", modelConfigId: "", enabled: true }
-  ];
-
-  assert.deepEqual(
-    getInvalidFriendProfiles(friends, models).map((friend) => friend.id),
-    ["friend-disabled-model", "friend-missing-model", "friend-unbound"]
-  );
-});
-
-test("syncFriendsStateWithModels reconciles group settings using synced friends", () => {
-  const models = [
-    { id: "chatgpt", name: "ChatGPT", enabled: true },
-    { id: "claude", name: "Claude", enabled: true }
-  ];
-  const friends = [{ id: "friend-chatgpt", name: "ChatGPT", modelConfigId: "chatgpt", enabled: true }];
-  const groupSettings = {
-    memberIds: ["friend-chatgpt"],
-    sharedSystemPromptEnabled: false,
-    sharedSystemPrompt: "",
-    platformFeatureEnabled: false,
-    preferredPlatform: "gemini",
-    synthesisFriendId: "friend-chatgpt"
-  };
-
-  const result = syncFriendsStateWithModels(friends, models, groupSettings, {
-    getDefaultFriendSystemPrompt: (name) => `default:${name}`
-  });
-
-  assert.deepEqual(result.friends.map((friend) => friend.id), ["friend-chatgpt", "friend-claude"]);
-  assert.deepEqual(result.groupSettings.memberIds, ["friend-chatgpt"]);
-  assert.equal(result.groupSettings.synthesisFriendId, "friend-chatgpt");
 });

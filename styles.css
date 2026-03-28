@@ -1559,6 +1559,147 @@ body.frontend-access-locked #frontend-password-modal {
   overflow-wrap: anywhere;
 }
 
+.markdown-content {
+  white-space: normal;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 1.4em 0 0.65em;
+  color: #163463;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.markdown-content h1 {
+  font-size: 1.55rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.28rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.08rem;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content table {
+  margin: 0 0 1em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.35rem;
+}
+
+.markdown-content li + li {
+  margin-top: 0.4em;
+}
+
+.markdown-content li::marker {
+  color: var(--blue);
+}
+
+.markdown-content a {
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.16em;
+}
+
+.markdown-content a:hover {
+  color: var(--blue-deep);
+}
+
+.markdown-content strong {
+  color: #183b70;
+}
+
+.markdown-content blockquote {
+  padding: 0.9rem 1rem;
+  border-left: 4px solid rgba(77, 107, 254, 0.32);
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(180deg, rgba(238, 243, 255, 0.92) 0%, rgba(247, 250, 255, 0.96) 100%);
+  color: #38527b;
+}
+
+.markdown-content hr {
+  margin: 1.4em 0;
+  border: 0;
+  border-top: 1px solid rgba(77, 107, 254, 0.16);
+}
+
+.markdown-content code {
+  padding: 0.14rem 0.42rem;
+  border-radius: 8px;
+  background: rgba(77, 107, 254, 0.08);
+  color: #23427a;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.markdown-content pre {
+  overflow-x: auto;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(77, 107, 254, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f3f7ff 0%, #edf3ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.markdown-content pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: #163463;
+  white-space: pre;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(77, 107, 254, 0.12);
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(77, 107, 254, 0.1);
+}
+
+.markdown-content th {
+  background: rgba(77, 107, 254, 0.08);
+  color: #183b70;
+  font-weight: 700;
+}
+
+.markdown-content tr:last-child td {
+  border-bottom: 0;
+}
+
 .ai-card-loading {
   display: grid;
   gap: 10px;

@@ -82,7 +82,8 @@ function replaceMarkdownLinks(text, store) {
 
     if (depth !== 0) {
       output += store(text.slice(labelStart + 1, labelEnd));
-      index = text.length;
+      const trailingTextStart = text.slice(labelEnd + 2).search(/\s/);
+      index = trailingTextStart === -1 ? text.length : labelEnd + 2 + trailingTextStart;
       continue;
     }
 

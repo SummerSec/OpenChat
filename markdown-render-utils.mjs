@@ -28,14 +28,37 @@ function isSeparatorCharacter(char) {
   return /[\p{P}\p{S}]/u.test(char);
 }
 
+function looksLikePlainTextSuffix(value) {
+  const normalized = value.replace(/^[\]\)}]+/u, "");
+  if (!normalized || !/^[\p{P}\p{S}]+[^\s\p{P}\p{S}]+$/u.test(normalized)) {
+    return false;
+  }
+
+  const leadingSeparator = normalized[0];
+  return !".:-_~/%?#=&+@".includes(leadingSeparator);
+}
+
 function findMalformedLinkRecoveryIndex(text, hrefStart) {
   const hrefText = text.slice(hrefStart);
   const trailingTextStart = hrefText.search(/\s/);
 
   if (trailingTextStart !== -1) {
     let suffixStart = trailingTextStart;
-    while (suffixStart > 0 && isSeparatorCharacter(hrefText[suffixStart - 1])) {
-      suffixStart -= 1;
+
+    const gluedSuffixMatch = hrefText
+      .slice(0, trailingTextStart)
+      .match(/[\p{P}\p{S}]+[^\s\p{P}\p{S}]+$/u);
+
+    if (
+      gluedSuffixMatch &&
+      gluedSuffixMatch.index !== undefined &&
+      looksLikePlainTextSuffix(gluedSuffixMatch[0])
+    ) {
+      suffixStart = gluedSuffixMatch.index;
+    } else {
+      while (suffixStart > 0 && isSeparatorCharacter(hrefText[suffixStart - 1])) {
+        suffixStart -= 1;
+      }
     }
 
     while (hrefText[suffixStart] === ")" || hrefText[suffixStart] === "]" || hrefText[suffixStart] === "}") {

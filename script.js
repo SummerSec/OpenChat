@@ -10,6 +10,7 @@ import {
   buildSynthesisPayload,
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
+import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -876,6 +877,14 @@ function escapeHtml(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function renderSynthesisContent(content = "") {
+  try {
+    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
+  } catch {
+    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+  }
 }
 
 function sleep(ms) {
@@ -2390,7 +2399,9 @@ function renderMessageStream() {
           : "";
       const contentBody =
         item.content || !item.isLoading
-          ? `<div class="ai-card-body">${escapeHtml(item.content || "")}</div>`
+          ? item.kind === "synthesis"
+            ? renderSynthesisContent(item.content || "")
+            : `<div class="ai-card-body">${escapeHtml(item.content || "")}</div>`
           : loadingBody;
 
       return `

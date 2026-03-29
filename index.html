@@ -164,6 +164,23 @@
                   data-i18n-placeholder="home.sharedPromptPlaceholder"
                 ></textarea>
               </div>
+              <div class="group-settings-block group-settings-block-feature">
+                <label class="group-toggle-line" for="group-platform-toggle">
+                  <input id="group-platform-toggle" type="checkbox" />
+                  <span data-i18n="home.platformFeatureToggle"></span>
+                </label>
+                <p class="settings-note" data-i18n="home.platformFeatureHint"></p>
+                <label class="field-label" for="group-platform-select" data-i18n="home.platformFeatureLabel"></label>
+                <select id="group-platform-select" class="inline-select"></select>
+                <article class="platform-feature-card" id="platform-feature-card">
+                  <div>
+                    <p class="panel-label" data-i18n="home.platformFeatureCardLabel"></p>
+                    <strong id="platform-feature-name"></strong>
+                  </div>
+                  <p class="platform-feature-copy" id="platform-feature-copy"></p>
+                  <p class="platform-feature-meta" id="platform-feature-meta"></p>
+                </article>
+              </div>
             </div>
             <div class="group-settings-actions">
               <button
@@ -209,6 +226,25 @@
           </section>
         </section>
       </main>
+    </div>
+
+    <div id="frontend-password-modal" class="login-modal" hidden>
+      <div class="login-modal-backdrop" id="frontend-password-backdrop"></div>
+      <div class="login-modal-box frontend-password-box">
+        <p class="panel-label" data-i18n="common.frontendPasswordEyebrow"></p>
+        <h2 data-i18n="common.frontendPasswordTitle"></h2>
+        <p class="page-copy compact" data-i18n="common.frontendPasswordCopy"></p>
+        <label class="field-label" for="frontend-password-input" data-i18n="common.frontendPasswordLabel"></label>
+        <input
+          class="text-input"
+          id="frontend-password-input"
+          type="password"
+          autocomplete="current-password"
+          data-i18n-placeholder="common.frontendPasswordPlaceholder"
+        />
+        <div id="frontend-password-error" class="login-modal-error" hidden></div>
+        <button class="primary-button" id="frontend-password-submit" data-i18n="common.frontendPasswordAction"></button>
+      </div>
     </div>
 
     <script type="module" src="script.js"></script>

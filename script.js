@@ -1,12 +1,31 @@
-﻿const STORAGE_KEYS = {
+import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./mock-response-utils.mjs";
+import { detectProviderKind, hasLiveProviderConfig } from "./frontend-provider-utils.mjs";
+import {
+  buildModelTestPrompt,
+  describeModelTestFailure,
+  describeNonJsonModelResponse
+} from "./model-test-utils.mjs";
+import {
+  buildFallbackSynthesis,
+  buildSynthesisPayload,
+  buildSynthesisPromptText
+} from "./synthesis-utils.mjs";
+import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+
+const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
   account: "multiplechat-local-account",
   history: "multiplechat-session-history",
   models: "multiplechat-model-configs",
   friends: "openchat-friend-profiles",
   groupSettings: "openchat-default-group-settings",
-  language: "multiplechat-language"
+  language: "multiplechat-language",
+  frontendAccess: "openchat-frontend-access-md5"
 };
+
+const FRONTEND_AUTH_ENV_HASH = import.meta.env.VITE_FRONTEND_PASSWORD_MD5 || "";
+const FRONTEND_AUTH_CONFIG_PATH = "/frontend-auth.json";
+const LOCAL_MODEL_CONFIG_PATH = "/openchat.local-models.json";
 
 const DEFAULT_MODELS = [
   {
@@ -96,6 +115,100 @@ const PROVIDER_PRESETS = {
   Custom: { baseUrl: "https://api.example.com/v1", model: "custom-model-id" }
 };
 
+const PLATFORM_OPTIONS = [
+  {
+    id: "gemini",
+    name: "Gemini",
+    company: "Google",
+    strengths: {
+      "zh-CN": "Google 搜索、全球网页发现、公开知识站点",
+      en: "Google search, global web discovery, and knowledge sources"
+    },
+    coverage: {
+      "zh-CN": "适合国际资料、英文网页、研究与百科型问题。",
+      en: "Best for international research, English pages, and web-wide discovery."
+    }
+  },
+  {
+    id: "grok",
+    name: "Grok",
+    company: "xAI",
+    strengths: {
+      "zh-CN": "X / Twitter 实时动态、趋势讨论、社交信号",
+      en: "X/Twitter real-time discussion, trends, and social signals"
+    },
+    coverage: {
+      "zh-CN": "适合热点话题、舆情、人物近期动态和社交讨论。",
+      en: "Best for social chatter, trend tracking, and public-figure updates."
+    }
+  },
+  {
+    id: "doubao",
+    name: "豆包",
+    company: "字节跳动",
+    strengths: {
+      "zh-CN": "抖音、头条、中文热点、短视频趋势",
+      en: "Douyin, Toutiao, Chinese trends, and short-video topics"
+    },
+    coverage: {
+      "zh-CN": "适合中文热点、消费趋势、短视频内容与泛娱乐信息。",
+      en: "Best for Chinese trend sensing, consumer topics, and short-video content."
+    }
+  },
+  {
+    id: "yuanbao",
+    name: "元宝",
+    company: "腾讯",
+    strengths: {
+      "zh-CN": "微信公众号、腾讯生态、中文信源补充",
+      en: "WeChat public accounts, Tencent sources, and Chinese source expansion"
+    },
+    coverage: {
+      "zh-CN": "适合公众号文章、中文深度分析、腾讯系内容。",
+      en: "Best for WeChat articles and Tencent-linked Chinese sources."
+    }
+  },
+  {
+    id: "longcat",
+    name: "LongCat",
+    company: "美团",
+    strengths: {
+      "zh-CN": "本地生活、行业知识、结构化中文总结",
+      en: "Local services, Chinese knowledge, and structured summaries"
+    },
+    coverage: {
+      "zh-CN": "适合餐饮、旅游、城市生活、行业资料与中文知识整理。",
+      en: "Best for lifestyle, travel, merchant info, and structured Chinese knowledge."
+    }
+  },
+  {
+    id: "qwen",
+    name: "通义千问",
+    company: "阿里巴巴",
+    strengths: {
+      "zh-CN": "通用中文搜索、电商与企业生态、公开网页",
+      en: "General Chinese web search, ecommerce context, and public pages"
+    },
+    coverage: {
+      "zh-CN": "适合作为通用中文检索 fallback，也适合阿里生态相关问题。",
+      en: "Best as a broad Chinese-web fallback and Alibaba-related source."
+    }
+  },
+  {
+    id: "minimaxi",
+    name: "MiniMax",
+    company: "MiniMax",
+    strengths: {
+      "zh-CN": "通用中文问答、生活问题、B 站等泛内容查询",
+      en: "General Chinese Q&A, lifestyle prompts, and broad consumer content"
+    },
+    coverage: {
+      "zh-CN": "适合轻量信息检索、生活类问题和内容型问答。",
+      en: "Best for lightweight discovery, lifestyle prompts, and broad Chinese Q&A."
+    }
+  }
+];
+
 const I18N = {
   "zh-CN": {
     titles: {
@@ -123,6 +236,11 @@ const I18N = {
       sharedPromptHint:
         "\u5f53\u524d\u4f1a\u8bdd\u5f00\u542f\u540e\uff0c\u6240\u6709\u7fa4\u53cb\u90fd\u4f1a\u4f7f\u7528\u540c\u4e00\u4efd system prompt\uff0c\u5e76\u8986\u76d6\u5404\u81ea\u7684\u4e2a\u4eba prompt\u3002",
       sharedPromptPlaceholder: "\u8f93\u5165\u672c\u4f1a\u8bdd\u7684\u7edf\u4e00 system prompt...",
+      platformFeatureToggle: "\u5f00\u542f\u5e73\u53f0\u641c\u7d22\u80fd\u529b",
+      platformFeatureHint:
+        "\u63a5\u5165 AI Search Hub \u7684\u591a\u5e73\u53f0\u80fd\u529b\u3002\u5f00\u542f\u540e\uff0c\u53ef\u4e3a\u5f53\u524d\u7fa4\u804a\u6307\u5b9a\u4e00\u4e2a\u4f18\u5148\u4f7f\u7528\u7684\u6570\u636e\u5e73\u53f0\u3002",
+      platformFeatureLabel: "\u641c\u7d22\u5e73\u53f0",
+      platformFeatureCardLabel: "\u5e73\u53f0\u80fd\u529b",
       applyCurrentConversation: "\u4ec5\u5e94\u7528\u5230\u5f53\u524d\u4f1a\u8bdd",
       saveDefaultGroup: "\u4fdd\u5b58\u4e3a\u9ed8\u8ba4\u7fa4\u8bbe\u7f6e",
       run: "\u8fd0\u884c",
@@ -190,6 +308,7 @@ const I18N = {
       synthesis: "\u6574\u5408",
       mock: "\u6a21\u62df\u7ed3\u679c",
       configured: "\u5df2\u914d\u7f6e",
+      fallback: "\u56de\u9000\u7ed3\u679c",
       runtimeFrontend:
         "\u524d\u7aef\u6a21\u5f0f\u4f1a\u628a\u914d\u7f6e\u548c\u5386\u53f2\u4fdd\u5b58\u5728\u672c\u5730\uff1b\u6d4f\u89c8\u5668\u8de8\u57df\u5141\u8bb8\u65f6\u53ef\u4ee5\u76f4\u63a5\u8bf7\u6c42\u6a21\u578b\u63a5\u53e3\u3002",
       runtimeBackend:
@@ -208,6 +327,13 @@ const I18N = {
       enabled: "\u5df2\u542f\u7528",
       disabled: "\u5df2\u505c\u7528",
       saveConfig: "\u4fdd\u5b58\u914d\u7f6e",
+      testConfig: "\u6d4b\u8bd5\u8fde\u63a5",
+      testAllModels: "\u6d4b\u8bd5\u5168\u90e8\u5df2\u542f\u7528\u6a21\u578b",
+      testing: "\u6d4b\u8bd5\u4e2d...",
+      testSuccess: "\u8fde\u63a5\u6210\u529f",
+      testMissingConfig: "\u7f3a\u5c11 Base URL \u6216 API key",
+      backendRecommended: "\u5efa\u8bae\u540e\u7aef\u6a21\u5f0f",
+      backendRecommendedCopy: "\u8fd9\u7c7b\u6a21\u578b\u82e5\u88ab\u6d4f\u89c8\u5668 CORS \u62e6\u622a\uff0c\u66f4\u9002\u5408\u5728\u540e\u7aef\u6a21\u5f0f\u4e0b\u6d4b\u8bd5\u6216\u8fd0\u884c\u3002",
       disable: "\u505c\u7528",
       enable: "\u542f\u7528",
       customModel: "\u81ea\u5b9a\u4e49\u6a21\u578b",
@@ -243,6 +369,15 @@ const I18N = {
       conversationGroupApplied: "\u5df2\u5e94\u7528\u5230\u5f53\u524d\u4f1a\u8bdd",
       backendLoadFailed: "\u65e0\u6cd5\u8fde\u63a5\u540e\u7aef\uff0c\u5df2\u5207\u56de\u524d\u7aef\u6a21\u5f0f\u3002",
       backendSyncFailed: "\u540e\u7aef\u540c\u6b65\u5931\u8d25\uff0c\u5f53\u524d\u6539\u52a8\u4ec5\u4fdd\u5b58\u5728\u672c\u5730\u3002",
+      frontendPasswordTitle: "\u524d\u7aef\u8bbf\u95ee\u9a8c\u8bc1",
+      frontendPasswordCopy:
+        "\u8bf7\u8f93\u5165\u8bbf\u95ee\u5bc6\u7801\u3002\u524d\u7aef\u6a21\u5f0f\u4e0b\uff0c\u9875\u9762\u9700\u8981\u5148\u901a\u8fc7\u5168\u5c40\u5bc6\u7801\u6821\u9a8c\u540e\u624d\u80fd\u7ee7\u7eed\u4f7f\u7528\u3002",
+      frontendPasswordEyebrow: "\u5b89\u5168\u5165\u53e3",
+      frontendPasswordLabel: "\u8bbf\u95ee\u5bc6\u7801",
+      frontendPasswordPlaceholder: "\u8f93\u5165\u5bc6\u7801",
+      frontendPasswordAction: "\u9a8c\u8bc1\u5e76\u8fdb\u5165",
+      frontendPasswordInvalid: "\u5bc6\u7801\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5\u3002",
+      frontendPasswordMissing: "\u672a\u914d\u7f6e\u524d\u7aef\u8bbf\u95ee\u5bc6\u7801\uff0c\u8bf7\u68c0\u67e5\u73af\u5883\u53d8\u91cf\u6216 frontend-auth.json\u3002",
       fieldDisplayName: "\u663e\u793a\u540d\u79f0",
       fieldProvider: "Provider",
       fieldAvatar: "\u6a21\u578b\u5934\u50cf",
@@ -292,6 +427,11 @@ const I18N = {
       sharedPromptHint:
         "When enabled for the current conversation, the shared system prompt fully overrides each member's personal prompt.",
       sharedPromptPlaceholder: "Write the shared system prompt for this conversation...",
+      platformFeatureToggle: "Enable platform search",
+      platformFeatureHint:
+        "Bring AI Search Hub platforms into this group. When enabled, the conversation gets a preferred data ecosystem for search-heavy tasks.",
+      platformFeatureLabel: "Search platform",
+      platformFeatureCardLabel: "Platform capability",
       applyCurrentConversation: "Apply to current conversation",
       saveDefaultGroup: "Save as default group",
       run: "Run",
@@ -357,6 +497,7 @@ const I18N = {
       synthesis: "synthesis",
       mock: "mock",
       configured: "configured",
+      fallback: "fallback",
       runtimeFrontend:
         "Frontend mode stores config and history locally and can call providers directly when CORS allows it.",
       runtimeBackend:
@@ -372,6 +513,13 @@ const I18N = {
       enabled: "Enabled",
       disabled: "Disabled",
       saveConfig: "Save config",
+      testConfig: "Test connection",
+      testAllModels: "Test all enabled models",
+      testing: "Testing...",
+      testSuccess: "Connection successful",
+      testMissingConfig: "Missing Base URL or API key",
+      backendRecommended: "Backend recommended",
+      backendRecommendedCopy: "This model is more reliable in backend mode when browser CORS blocks direct requests.",
       disable: "Disable",
       enable: "Enable",
       customModel: "Custom model",
@@ -407,6 +555,15 @@ const I18N = {
       conversationGroupApplied: "Applied to the current conversation",
       backendLoadFailed: "Could not reach the backend. Switched back to frontend mode.",
       backendSyncFailed: "Backend sync failed. Changes are only saved locally.",
+      frontendPasswordTitle: "Frontend access check",
+      frontendPasswordCopy:
+        "Enter the shared access password. In frontend mode, the app requires a global password check before use.",
+      frontendPasswordEyebrow: "Secure access",
+      frontendPasswordLabel: "Access password",
+      frontendPasswordPlaceholder: "Enter password",
+      frontendPasswordAction: "Unlock",
+      frontendPasswordInvalid: "Incorrect password. Try again.",
+      frontendPasswordMissing: "No frontend password hash is configured. Check the environment variable or frontend-auth.json.",
       fieldDisplayName: "Display name",
       fieldProvider: "Provider",
       fieldAvatar: "Avatar",
@@ -448,6 +605,7 @@ const modelToggleGrid = document.getElementById("model-toggle-grid");
 const modelCount = document.getElementById("model-count");
 const configGrid = document.getElementById("config-grid");
 const addCustomModelButton = document.getElementById("add-custom-model");
+const testEnabledModelsButton = document.getElementById("test-enabled-models");
 const friendGrid = document.getElementById("friend-grid");
 const addFriendButton = document.getElementById("add-friend");
 const accountEmail = document.getElementById("account-email");
@@ -467,6 +625,11 @@ const modalAccountEmail = document.getElementById("modal-account-email");
 const modalAccountName = document.getElementById("modal-account-name");
 const modalSaveAccount = document.getElementById("modal-save-account");
 const modalAccountError = document.getElementById("modal-account-error");
+const frontendPasswordModal = document.getElementById("frontend-password-modal");
+const frontendPasswordBackdrop = document.getElementById("frontend-password-backdrop");
+const frontendPasswordInput = document.getElementById("frontend-password-input");
+const frontendPasswordSubmit = document.getElementById("frontend-password-submit");
+const frontendPasswordError = document.getElementById("frontend-password-error");
 const groupSettingsToggleButton = document.getElementById("group-settings-toggle");
 const groupSettingsCloseButton = document.getElementById("group-settings-close");
 const groupSettingsPanel = document.getElementById("group-settings-panel");
@@ -474,11 +637,19 @@ const groupMemberPicker = document.getElementById("group-member-picker");
 const groupSynthesisSelect = document.getElementById("group-synthesis-select");
 const groupSharedToggle = document.getElementById("group-shared-toggle");
 const groupSharedPrompt = document.getElementById("group-shared-prompt");
+const groupPlatformToggle = document.getElementById("group-platform-toggle");
+const groupPlatformSelect = document.getElementById("group-platform-select");
+const platformFeatureName = document.getElementById("platform-feature-name");
+const platformFeatureCopy = document.getElementById("platform-feature-copy");
+const platformFeatureMeta = document.getElementById("platform-feature-meta");
 const applyGroupSettingsButton = document.getElementById("apply-group-settings");
 const saveDefaultGroupSettingsButton = document.getElementById("save-default-group-settings");
 
 let runtimeMode = localStorage.getItem(STORAGE_KEYS.runtime) || "frontend";
 let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
+let frontendPasswordHash = "";
+let frontendAccessBlocked = false;
+let modelTestState = {};
 let modelConfigs = normalizeModelConfigs(readJson(STORAGE_KEYS.models, cloneDefaultModels()));
 let friendProfiles = normalizeFriendProfiles(
   readJson(STORAGE_KEYS.friends, createDefaultFriendProfiles(modelConfigs)),
@@ -529,6 +700,8 @@ function createDefaultGroupSettings(friends = []) {
     memberIds,
     sharedSystemPromptEnabled: false,
     sharedSystemPrompt: "",
+    platformFeatureEnabled: false,
+    preferredPlatform: "gemini",
     synthesisFriendId: memberIds[0] || null
   };
 }
@@ -538,6 +711,8 @@ function cloneGroupSettings(settings = {}) {
     memberIds: Array.isArray(settings.memberIds) ? [...settings.memberIds] : [],
     sharedSystemPromptEnabled: Boolean(settings.sharedSystemPromptEnabled),
     sharedSystemPrompt: String(settings.sharedSystemPrompt || ""),
+    platformFeatureEnabled: Boolean(settings.platformFeatureEnabled),
+    preferredPlatform: String(settings.preferredPlatform || "gemini"),
     synthesisFriendId: settings.synthesisFriendId || null
   };
 }
@@ -577,6 +752,10 @@ function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
     memberIds,
     sharedSystemPromptEnabled: Boolean(settings.sharedSystemPromptEnabled),
     sharedSystemPrompt: String(settings.sharedSystemPrompt || ""),
+    platformFeatureEnabled: Boolean(settings.platformFeatureEnabled),
+    preferredPlatform: PLATFORM_OPTIONS.some((item) => item.id === settings.preferredPlatform)
+      ? settings.preferredPlatform
+      : "gemini",
     synthesisFriendId:
       memberIds.find((id) => id === settings.synthesisFriendId) || memberIds[0] || null
   };
@@ -584,6 +763,14 @@ function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
 
 function normalizeModelConfigs(items = []) {
   return items.map((item) => normalizeModelConfig(item));
+}
+
+function shouldApplyLocalModelConfig(currentModels = modelConfigs, incomingModels = []) {
+  return Array.isArray(currentModels) && currentModels.length === 0 && Array.isArray(incomingModels) && incomingModels.length > 0;
+}
+
+function shouldBootstrapLocalModels(storedModelsRaw = localStorage.getItem(STORAGE_KEYS.models), incomingModels = []) {
+  return (storedModelsRaw === null || storedModelsRaw === "") && Array.isArray(incomingModels) && incomingModels.length > 0;
 }
 
 function saveModelConfigs() {
@@ -692,6 +879,24 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
+function renderSynthesisContent(content = "") {
+  try {
+    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
+  } catch {
+    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+  }
+}
+
+function renderAssistantMessageContent({ content = "", isLoading = false, kind = "", loadingBody = "" } = {}) {
+  if (!content && isLoading) {
+    return loadingBody;
+  }
+
+  return kind === "synthesis"
+    ? renderSynthesisContent(content || "")
+    : `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -718,6 +923,196 @@ function handleBackendSyncError(error) {
   setRuntimeStatus(t("common.backendSyncFailed"));
 }
 
+function createMd5Hex(value = "") {
+  function rotateLeft(x, c) {
+    return (x << c) | (x >>> (32 - c));
+  }
+
+  function toHex(value32) {
+    let out = "";
+    for (let i = 0; i < 4; i += 1) {
+      out += ((value32 >>> (i * 8)) & 0xff).toString(16).padStart(2, "0");
+    }
+    return out;
+  }
+
+  const message = new TextEncoder().encode(String(value));
+  const originalLength = message.length;
+  const bitLength = originalLength * 8;
+  const paddedLength = (((originalLength + 8) >> 6) + 1) * 64;
+  const buffer = new Uint8Array(paddedLength);
+  buffer.set(message);
+  buffer[originalLength] = 0x80;
+
+  const view = new DataView(buffer.buffer);
+  view.setUint32(paddedLength - 8, bitLength >>> 0, true);
+  view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
+
+  let a0 = 0x67452301;
+  let b0 = 0xefcdab89;
+  let c0 = 0x98badcfe;
+  let d0 = 0x10325476;
+
+  const shifts = [
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+  ];
+  const constants = Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0);
+
+  for (let offset = 0; offset < paddedLength; offset += 64) {
+    const chunk = new Uint32Array(16);
+    for (let i = 0; i < 16; i += 1) {
+      chunk[i] = view.getUint32(offset + i * 4, true);
+    }
+
+    let a = a0;
+    let b = b0;
+    let c = c0;
+    let d = d0;
+
+    for (let i = 0; i < 64; i += 1) {
+      let f;
+      let g;
+      if (i < 16) {
+        f = (b & c) | (~b & d);
+        g = i;
+      } else if (i < 32) {
+        f = (d & b) | (~d & c);
+        g = (5 * i + 1) % 16;
+      } else if (i < 48) {
+        f = b ^ c ^ d;
+        g = (3 * i + 5) % 16;
+      } else {
+        f = c ^ (b | ~d);
+        g = (7 * i) % 16;
+      }
+
+      const temp = d;
+      d = c;
+      c = b;
+      const sum = (a + f + constants[i] + chunk[g]) >>> 0;
+      b = (b + rotateLeft(sum, shifts[i])) >>> 0;
+      a = temp;
+    }
+
+    a0 = (a0 + a) >>> 0;
+    b0 = (b0 + b) >>> 0;
+    c0 = (c0 + c) >>> 0;
+    d0 = (d0 + d) >>> 0;
+  }
+
+  return `${toHex(a0)}${toHex(b0)}${toHex(c0)}${toHex(d0)}`;
+}
+
+function normalizeFrontendPasswordHash(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function resolveFrontendPasswordHash(configHash = "") {
+  return normalizeFrontendPasswordHash(FRONTEND_AUTH_ENV_HASH) || normalizeFrontendPasswordHash(configHash);
+}
+
+function hasUnlockedFrontendAccess() {
+  return Boolean(frontendPasswordHash) &&
+    normalizeFrontendPasswordHash(localStorage.getItem(STORAGE_KEYS.frontendAccess)) === frontendPasswordHash;
+}
+
+async function validateFrontendPassword(password) {
+  if (!frontendPasswordHash) return false;
+  return createMd5Hex(password) === frontendPasswordHash;
+}
+
+async function loadFrontendPasswordHash() {
+  if (runtimeMode !== "frontend") return "";
+  if (FRONTEND_AUTH_ENV_HASH) {
+    frontendPasswordHash = normalizeFrontendPasswordHash(FRONTEND_AUTH_ENV_HASH);
+    return frontendPasswordHash;
+  }
+
+  try {
+    const response = await fetch(FRONTEND_AUTH_CONFIG_PATH, { cache: "no-store" });
+    if (!response.ok) {
+      frontendPasswordHash = "";
+      return "";
+    }
+    const config = await response.json();
+    frontendPasswordHash = resolveFrontendPasswordHash(config?.frontendPasswordMd5 || config?.passwordMd5 || "");
+    return frontendPasswordHash;
+  } catch {
+    frontendPasswordHash = "";
+    return "";
+  }
+}
+
+async function loadLocalModelConfigFile() {
+  if (runtimeMode !== "frontend") return;
+  try {
+    const response = await fetch(LOCAL_MODEL_CONFIG_PATH, { cache: "no-store" });
+    if (!response.ok) return;
+    const config = await response.json();
+    const nextModels = normalizeModelConfigs(Array.isArray(config?.models) ? config.models : []);
+    if (!shouldBootstrapLocalModels(localStorage.getItem(STORAGE_KEYS.models), nextModels)) return;
+    modelConfigs = nextModels;
+    saveModelConfigs();
+    reconcileGroupStates();
+  } catch (error) {
+    console.warn("Failed to load local model config file:", error);
+  }
+}
+
+function updateFrontendPasswordError(message = "") {
+  if (!frontendPasswordError) return;
+  frontendPasswordError.hidden = !message;
+  frontendPasswordError.textContent = message;
+  frontendPasswordInput?.classList.toggle("is-invalid", Boolean(message));
+  if (message && frontendPasswordModal) {
+    frontendPasswordModal.classList.remove("shake");
+    void frontendPasswordModal.offsetWidth;
+    frontendPasswordModal.classList.add("shake");
+  }
+}
+
+function setFrontendPasswordModalVisible(visible) {
+  if (!frontendPasswordModal) return;
+  frontendAccessBlocked = Boolean(visible) && runtimeMode === "frontend";
+  document.body.classList.toggle("frontend-access-locked", frontendAccessBlocked);
+  frontendPasswordModal.hidden = !visible;
+  if (visible) {
+    frontendPasswordModal.classList.remove("shake");
+    frontendPasswordInput?.focus();
+  }
+}
+
+async function ensureFrontendAccess() {
+  if (runtimeMode !== "frontend") return true;
+  await loadFrontendPasswordHash();
+  if (!frontendPasswordHash) {
+    setFrontendPasswordModalVisible(true);
+    updateFrontendPasswordError(t("common.frontendPasswordMissing"));
+    return false;
+  }
+  if (hasUnlockedFrontendAccess()) {
+    setFrontendPasswordModalVisible(false);
+    updateFrontendPasswordError("");
+    return true;
+  }
+  setFrontendPasswordModalVisible(true);
+  updateFrontendPasswordError("");
+  return false;
+}
+
+function guardFrontendAccess(event) {
+  if (!frontendAccessBlocked) return false;
+  if (frontendPasswordModal?.contains(event.target)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  frontendPasswordInput?.focus();
+  return true;
+}
+
 async function syncHistoryToBackend(items = getHistoryItems()) {
   if (runtimeMode !== "backend") return;
   await apiRequest("/api/conversations", {
@@ -732,6 +1127,7 @@ async function switchRuntimeMode(nextMode) {
   runtimeMode = nextMode;
   localStorage.setItem(STORAGE_KEYS.runtime, runtimeMode);
   if (runtimeMode === "backend") {
+    setFrontendPasswordModalVisible(false);
     try {
       await loadBackendState();
     } catch (error) {
@@ -1103,6 +1499,7 @@ function normalizeConversationMessage(message = {}, fallbackDate = new Date().to
     provider: message.provider || "",
     model: message.model || "",
     source: message.source || "",
+    error: message.error || "",
     content: String(message.content || ""),
     thinking: String(message.thinking || ""),
     createdAt: message.createdAt || fallbackDate,
@@ -1132,6 +1529,7 @@ function buildConversationFromSession(session = {}) {
             provider: entry.provider,
             model: entry.model,
             source: entry.source,
+            error: entry.error || "",
             content: entry.content,
             thinking: entry.thinking || "",
             createdAt: fallbackDate
@@ -1189,6 +1587,7 @@ function serializeConversation(messages = []) {
     provider: message.provider,
     model: message.model,
     source: message.source,
+    error: message.error,
     content: message.content,
     thinking: message.thinking,
     createdAt: message.createdAt,
@@ -1224,34 +1623,15 @@ async function streamTextToMessage(messageId, text, field = "content") {
   updateConversationMessageById(messageId, { isLoading: false });
 }
 
-function mockResponseFor(model, prompt) {
-  void prompt;
-  if (currentLanguage === "zh-CN") {
-    const responses = {
-      ChatGPT:
-        "\u5148\u7ed9\u51fa\u4e00\u4e2a\u53ef\u76f4\u63a5\u6267\u884c\u7684\u7248\u672c\uff1a\n1. \u660e\u786e\u76ee\u6807\u3001\u7ea6\u675f\u548c\u6210\u529f\u6807\u51c6\u3002\n2. \u628a\u7b54\u6848\u62c6\u6210\u4e09\u4e2a\u4f18\u5148\u7ea7\u6700\u9ad8\u7684\u52a8\u4f5c\u3002\n3. \u5148\u9a8c\u8bc1\u6210\u672c\u6700\u4f4e\u3001\u6536\u76ca\u6700\u660e\u663e\u7684\u8def\u5f84\u3002\n\n\u5982\u679c\u8fd9\u662f\u5b9e\u9645\u5de5\u4f5c\u95ee\u9898\uff0c\u6211\u4f1a\u5148\u7ed9\u7ed3\u8bba\uff0c\u518d\u8865\u5145\u53d6\u820d\u548c\u98ce\u9669\u3002",
-      Claude:
-        "\u6211\u4f1a\u66f4\u5173\u6ce8\u8fb9\u754c\u6761\u4ef6\u3001\u5931\u8d25\u573a\u666f\u548c\u8868\u8fbe\u8d28\u91cf\u3002\n\n\u66f4\u7a33\u59a5\u7684\u505a\u6cd5\u662f\u628a\u201c\u7406\u60f3\u5efa\u8bae\u201d\u548c\u201c\u73b0\u5b9e\u9650\u5236\u201d\u62c6\u5f00\u8bb2\uff0c\u8fd9\u6837\u6700\u7ec8\u65b9\u6848\u4f1a\u66f4\u53ef\u4fe1\uff0c\u4e5f\u66f4\u65b9\u4fbf\u843d\u5730\u3002",
-      Gemini:
-        "\u8fd9\u4e2a\u95ee\u9898\u9700\u8981\u4e00\u5c42\u9a8c\u8bc1\u89c6\u89d2\u3002\n\n\u6709\u4e9b\u5224\u65ad\u53ef\u4ee5\u5148\u7ed9\u65b9\u5411\u6027\u7ed3\u8bba\uff0c\u4f46\u5982\u679c\u8981\u76f4\u63a5\u7528\u4e8e\u51b3\u7b56\uff0c\u6211\u4f1a\u628a\u5047\u8bbe\u3001\u8bc1\u636e\u8d28\u91cf\u548c\u4e0d\u786e\u5b9a\u6027\u660e\u786e\u6807\u51fa\u6765\u3002",
-      Grok:
-        "\u76f4\u63a5\u8bf4\u91cd\u70b9\uff1a\u5148\u6293\u6700\u6709\u6760\u6746\u7684\u90e8\u5206\u3002\n\n\u4e0d\u8981\u4e00\u5f00\u59cb\u5c31\u628a\u65b9\u6848\u94fa\u5f97\u592a\u6ee1\uff0c\u5148\u627e\u51fa\u771f\u6b63\u5f71\u54cd\u7ed3\u679c\u7684\u53d8\u91cf\uff0c\u518d\u56f4\u7ed5\u5b83\u6269\u5c55\u6267\u884c\u6b65\u9aa4\u3002"
-    };
-    return responses[model.name] ||
-      "\u8fd9\u662f\u6765\u81ea\u81ea\u5b9a\u4e49\u63a5\u53e3\u7684\u6a21\u62df\u56de\u590d\u3002\n\n\u6211\u4f1a\u5148\u7ed9\u76f4\u63a5\u7ed3\u8bba\uff0c\u518d\u5217\u51fa\u5173\u952e\u5047\u8bbe\u3001\u6267\u884c\u987a\u5e8f\u548c\u9700\u8981\u8865\u5145\u9a8c\u8bc1\u7684\u70b9\u3002";
-  }
-
-  const responses = {
-    ChatGPT:
-      "Start with the usable version:\n1. Define the goal and constraints.\n2. Break the answer into three priorities.\n3. Validate the lowest-cost path first.\n\nI would give the short answer first and then add tradeoffs.",
-    Claude:
-      "I would focus on nuance, failure modes, and communication quality.\n\nThe answer becomes stronger if we separate the ideal recommendation from real-world constraints.",
-    Gemini:
-      "This needs a verification layer.\n\nAnything used for a real decision should call out assumptions, evidence quality, and uncertainty explicitly.",
-    Grok:
-      "Straight answer: focus on leverage first.\n\nDo not overbuild the whole solution up front. Find the variable that matters most and optimize around it."
-  };
-  return responses[model.name] || "This is a mock response from a custom endpoint.\n\nI would provide a direct answer first, then list assumptions, execution order, and verification points.";
+function mockResponseFor(model, prompt, platformContext = null) {
+  return buildPromptAwareMockResponse({
+    friendName: model.name,
+    prompt,
+    language: currentLanguage,
+    platformName: platformContext?.name || "",
+    platformCompany: platformContext?.company || "",
+    platformStrengths: platformContext?.strengths || ""
+  });
 }
 
 function renderUserBar() {
@@ -1280,6 +1660,8 @@ function renderRuntime() {
 
 function renderModelSummary() {
   const members = resolveConversationFriends();
+  const platform =
+    currentConversationGroupSettings.platformFeatureEnabled && getPreferredPlatformOption(currentConversationGroupSettings);
   if (selectedModels) {
     selectedModels.innerHTML = members
       .map(
@@ -1296,6 +1678,14 @@ function renderModelSummary() {
         `
       )
       .join("");
+    if (platform) {
+      selectedModels.innerHTML += `
+        <span class="model-chip model-chip-platform">
+          <span class="model-chip-platform-badge">${escapeHtml(platform.company)}</span>
+          <span>${escapeHtml(platform.name)}</span>
+        </span>
+      `;
+    }
   }
   const label = t("common.friendsSelected", { count: members.length });
   if (selectedCount) selectedCount.textContent = label;
@@ -1325,6 +1715,372 @@ function renderSynthesisOptions() {
   if (groupSynthesisSelect) {
     groupSynthesisSelect.value = nextValue;
   }
+}
+
+function getPreferredPlatformOption(groupSettings = currentConversationGroupSettings) {
+  return (
+    PLATFORM_OPTIONS.find((item) => item.id === groupSettings.preferredPlatform) ||
+    PLATFORM_OPTIONS[0] ||
+    null
+  );
+}
+
+function buildPlatformFeatureMeta(platform) {
+  if (!platform) return "";
+  const strength =
+    platform.strengths?.[currentLanguage] || platform.strengths?.["zh-CN"] || platform.strengths?.en || "";
+  return [platform.company, strength].filter(Boolean).join(" · ");
+}
+
+function getPlatformRoutingContext(groupSettings = currentConversationGroupSettings) {
+  if (!groupSettings?.platformFeatureEnabled) return null;
+  const platform = getPreferredPlatformOption(groupSettings);
+  if (!platform) return null;
+  return {
+    id: platform.id,
+    name: platform.name,
+    company: platform.company,
+    strengths:
+      platform.strengths?.[currentLanguage] || platform.strengths?.["zh-CN"] || platform.strengths?.en || "",
+    coverage:
+      platform.coverage?.[currentLanguage] || platform.coverage?.["zh-CN"] || platform.coverage?.en || ""
+  };
+}
+
+function buildPlatformPromptAddon(platformContext) {
+  if (!platformContext) return "";
+  if (currentLanguage === "zh-CN") {
+    return `\n\n平台路由要求：本次会话优先参考 ${platformContext.name}（${platformContext.company}）对应的数据生态与搜索能力。擅长方向：${platformContext.strengths}。回答时请尽量体现这个平台更容易触达的信息视角，并明确你的判断边界。`;
+  }
+  return `\n\nPlatform routing requirement: prioritize the ${platformContext.name} (${platformContext.company}) data ecosystem and search strengths for this conversation. Strengths: ${platformContext.strengths}. Reflect that platform's likely information vantage point and state your confidence boundaries.`;
+}
+
+function buildPlatformSourceLabel(platformContext, baseSource) {
+  if (!platformContext) return baseSource;
+  return `${baseSource} · ${platformContext.name}`;
+}
+
+async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "") {
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: prompt });
+  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${model.apiKey}`
+    },
+    body: JSON.stringify({
+      model: model.model,
+      messages
+    })
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    error.responseText = responseText;
+    error.contentType = response.headers.get("content-type") || "";
+    throw error;
+  }
+  const data = await response.json();
+  const message = data.choices?.[0]?.message || {};
+  const content =
+    typeof message.content === "string"
+      ? message.content
+      : Array.isArray(message.content)
+      ? message.content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
+      : "";
+  const thinking =
+    typeof message.reasoning_content === "string"
+      ? message.reasoning_content
+      : Array.isArray(message.reasoning_content)
+      ? message.reasoning_content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
+      : "";
+  return { content: content.trim(), thinking: thinking.trim() };
+}
+
+async function callAnthropicFrontend(model, prompt, systemPrompt = "") {
+  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "x-api-key": model.apiKey
+    },
+    body: JSON.stringify({
+      model: model.model,
+      max_tokens: 1200,
+      system: systemPrompt || undefined,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    error.responseText = responseText;
+    error.contentType = response.headers.get("content-type") || "";
+    throw error;
+  }
+  const data = await response.json();
+  const blocks = Array.isArray(data.content) ? data.content : [];
+  return {
+    content: blocks
+      .filter((item) => item?.type === "text")
+      .map((item) => item?.text || "")
+      .filter(Boolean)
+      .join("\n\n")
+      .trim(),
+    thinking: blocks
+      .filter((item) => item?.type === "thinking")
+      .map((item) => item?.thinking || item?.text || "")
+      .filter(Boolean)
+      .join("\n\n")
+      .trim()
+  };
+}
+
+async function callGeminiFrontend(model, prompt, systemPrompt = "") {
+  const response = await fetch(
+    `${String(model.baseUrl || "").replace(/\/+$/, "")}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: systemPrompt ? `${systemPrompt}\n\n用户问题：${prompt}` : prompt
+              }
+            ]
+          }
+        ]
+      })
+    }
+  );
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    error.responseText = responseText;
+    error.contentType = response.headers.get("content-type") || "";
+    throw error;
+  }
+  const data = await response.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  return {
+    content: parts.map((item) => item?.text || "").filter(Boolean).join("\n\n").trim(),
+    thinking: ""
+  };
+}
+
+async function generateFrontendFriendResponse(friend, prompt, platformContext) {
+  const systemPrompt = `${
+    currentConversationGroupSettings.sharedSystemPromptEnabled
+      ? currentConversationGroupSettings.sharedSystemPrompt
+      : friend.systemPrompt
+  }${buildPlatformPromptAddon(platformContext)}`.trim();
+
+  if (!hasLiveProviderConfig(friend)) {
+    const { thinking, content } = normalizeModelResult({
+      content: mockResponseFor(friend, prompt, platformContext)
+    });
+    return {
+      friendId: friend.id,
+      name: friend.name,
+      avatar: friend.avatar || friend.modelAvatar || "",
+      modelConfigId: friend.modelConfigId,
+      modelConfigName: friend.modelConfigName,
+      provider: friend.provider,
+      model: friend.model,
+      source: buildPlatformSourceLabel(platformContext, t("common.mock")),
+      thinking,
+      content,
+      error: ""
+    };
+  }
+
+  try {
+    let output;
+    const providerKind = detectProviderKind(friend);
+    if (providerKind === "anthropic") {
+      output = await callAnthropicFrontend(friend, prompt, systemPrompt);
+    } else if (providerKind === "gemini") {
+      output = await callGeminiFrontend(friend, prompt, systemPrompt);
+    } else {
+      output = await callOpenAICompatibleFrontend(friend, prompt, systemPrompt);
+    }
+    return {
+      friendId: friend.id,
+      name: friend.name,
+      avatar: friend.avatar || friend.modelAvatar || "",
+      modelConfigId: friend.modelConfigId,
+      modelConfigName: friend.modelConfigName,
+      provider: friend.provider,
+      model: friend.model,
+      source: buildPlatformSourceLabel(platformContext, t("common.configured")),
+      thinking: output.thinking || "",
+      content: output.content || mockResponseFor(friend, prompt, platformContext),
+      error: ""
+    };
+  } catch (error) {
+    const classifiedError =
+      error?.message === "Failed to fetch"
+        ? currentLanguage === "zh-CN"
+          ? "浏览器请求失败，可能是 CORS、网络异常或目标服务拒绝前端直连"
+          : "Browser request failed. The endpoint may be blocked by CORS, network issues, or browser-side access restrictions."
+        : error.message || "";
+    const { thinking, content } = normalizeModelResult({
+      content: mockResponseFor(friend, prompt, platformContext)
+    });
+    return {
+      friendId: friend.id,
+      name: friend.name,
+      avatar: friend.avatar || friend.modelAvatar || "",
+      modelConfigId: friend.modelConfigId,
+      modelConfigName: friend.modelConfigName,
+      provider: friend.provider,
+      model: friend.model,
+      source: buildPlatformSourceLabel(platformContext, t("common.fallback")),
+      thinking,
+      content,
+      error: classifiedError
+    };
+  }
+}
+
+async function generateFrontendSynthesisResponse(synthesisFriend, prompt, results, platformContext) {
+  const synthesisPayload = buildSynthesisPayload({
+    prompt,
+    language: currentLanguage,
+    results
+  });
+  const synthesisPrompt = buildSynthesisPromptText({
+    prompt,
+    language: currentLanguage,
+    results
+  });
+  const systemPrompt = currentLanguage === "zh-CN"
+    ? `你负责整合多位 AI 群友的输出。请务必阅读 user_prompt 与 member_outputs，基于它们生成最终整合答案，而不是忽略群友内容重新独立作答。输出时先总结共识，再说明关键分歧，最后给出一版清晰可执行的最终回答。${buildPlatformPromptAddon(platformContext)}`
+    : `You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.${buildPlatformPromptAddon(platformContext)}`;
+
+  if (!hasLiveProviderConfig(synthesisFriend)) {
+    return {
+      content: buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
+      source: t("common.fallback"),
+      error: ""
+    };
+  }
+
+  try {
+    let output;
+    const providerKind = detectProviderKind(synthesisFriend);
+    if (providerKind === "anthropic") {
+      output = await callAnthropicFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+    } else if (providerKind === "gemini") {
+      output = await callGeminiFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+    } else {
+      output = await callOpenAICompatibleFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+    }
+    return {
+      content: output.content || buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
+      source: t("common.configured"),
+      error: "",
+      payload: synthesisPayload
+    };
+  } catch (error) {
+    return {
+      content: buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
+      source: t("common.fallback"),
+      error: describeModelTestFailure({ message: error.message, language: currentLanguage, mode: runtimeMode }).message,
+      payload: synthesisPayload
+    };
+  }
+}
+
+async function testModelConnection(model) {
+  const prompt = buildModelTestPrompt(currentLanguage);
+  if (!hasLiveProviderConfig(model)) {
+    return { ok: false, message: t("common.testMissingConfig") };
+  }
+
+  try {
+    const providerKind = detectProviderKind(model);
+    let output;
+    if (providerKind === "anthropic") {
+      output = await callAnthropicFrontend(model, prompt, "");
+    } else if (providerKind === "gemini") {
+      output = await callGeminiFrontend(model, prompt, "");
+    } else {
+      output = await callOpenAICompatibleFrontend(model, prompt, "");
+    }
+    return {
+      ok: true,
+      message: output.content ? `${t("common.testSuccess")}: ${output.content}` : t("common.testSuccess")
+    };
+  } catch (error) {
+    const text = String(error?.responseText || "");
+    if (text) {
+      const described = describeNonJsonModelResponse(text, error.status || 200, error.contentType || "");
+      return {
+        ok: false,
+        message: describeModelTestFailure({
+          message: described.message,
+          language: currentLanguage,
+          mode: runtimeMode
+        }).message
+      };
+    }
+    return {
+      ok: false,
+      message: describeModelTestFailure({
+        message: error.message || "Request failed",
+        language: currentLanguage,
+        mode: runtimeMode
+      }).message
+    };
+  }
+}
+
+async function testModelConnectionViaBackend(model) {
+  return apiRequest("/api/models/test", {
+    method: "POST",
+    body: JSON.stringify({ model, language: currentLanguage })
+  });
+}
+
+async function runModelConnectionTest(id, card) {
+  const current = modelConfigs.find((item) => item.id === id);
+  if (!current || !card) return;
+  const draft = {
+    ...current,
+    name: card.querySelector('[data-field="name"]')?.value.trim() || current.name,
+    provider: card.querySelector('[data-field="provider"]')?.value.trim() || current.provider,
+    model: card.querySelector('[data-field="model"]')?.value.trim() || current.model,
+    baseUrl: card.querySelector('[data-field="baseUrl"]')?.value.trim() || current.baseUrl,
+    apiKey: card.querySelector('[data-field="apiKey"]')?.value.trim() || current.apiKey
+  };
+
+  modelTestState[id] = { status: "pending", message: t("common.testing") };
+  renderConfigGrid();
+
+  const result =
+    runtimeMode === "backend"
+      ? await testModelConnectionViaBackend(draft).catch((error) => ({ ok: false, message: error.message }))
+      : await testModelConnection(draft);
+
+  modelTestState[id] = {
+    status: result.ok ? "success" : "error",
+    message: result.message || (result.ok ? t("common.testSuccess") : "Request failed")
+  };
+  renderConfigGrid();
 }
 
 function renderGroupSettingsPanel() {
@@ -1376,6 +2132,30 @@ function renderGroupSettingsPanel() {
     groupSharedPrompt.disabled = !draftGroupSettings.sharedSystemPromptEnabled;
   }
 
+  if (groupPlatformToggle) {
+    groupPlatformToggle.checked = Boolean(draftGroupSettings.platformFeatureEnabled);
+  }
+
+  if (groupPlatformSelect) {
+    groupPlatformSelect.innerHTML = PLATFORM_OPTIONS.map(
+      (item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`
+    ).join("");
+    groupPlatformSelect.value = getPreferredPlatformOption(draftGroupSettings)?.id || PLATFORM_OPTIONS[0]?.id || "";
+    groupPlatformSelect.disabled = !draftGroupSettings.platformFeatureEnabled;
+  }
+
+  const platform = getPreferredPlatformOption(draftGroupSettings);
+  if (platformFeatureName) {
+    platformFeatureName.textContent = platform?.name || "";
+  }
+  if (platformFeatureCopy) {
+    platformFeatureCopy.textContent =
+      platform?.coverage?.[currentLanguage] || platform?.coverage?.["zh-CN"] || platform?.coverage?.en || "";
+  }
+  if (platformFeatureMeta) {
+    platformFeatureMeta.textContent = buildPlatformFeatureMeta(platform);
+  }
+
   if (groupSynthesisSelect) {
     const members = resolveConversationFriends(draftGroupSettings);
     groupSynthesisSelect.innerHTML = members
@@ -1415,10 +2195,11 @@ function renderConversationList() {
           const displayTitle = getDisplayConversationTitle(item);
           const synthesisFriend = getSessionSynthesisFriend(item);
           const participants = getConversationParticipants(item);
-          const meta = formatMetaParts([
-            synthesisFriend?.name || item.synthesisModel || "",
-            `${participants.length || item.models?.length || 0} ${t("common.friendUnit")}`
-          ]);
+      const meta = formatMetaParts([
+        synthesisFriend?.name || item.synthesisModel || "",
+        item.preferredPlatformName || "",
+        `${participants.length || item.models?.length || 0} ${t("common.friendUnit")}`
+      ]);
           const preview = item.prompt || t("common.waitingMessage");
           const titleMarkup =
             editingHistoryIndex === index
@@ -1528,6 +2309,7 @@ function renderHistory() {
       const participants = getConversationParticipants(item);
       const meta = formatMetaParts([
         item.timestamp,
+        item.preferredPlatformName || "",
         `${participants.length || item.models?.length || 0} ${t("common.friendUnit")}`,
         synthesisFriend?.name || item.synthesisModel || "",
         getRuntimeLabel(item.runtimeMode)
@@ -1600,6 +2382,9 @@ function renderMessageStream() {
       }
 
       const meta = formatMetaParts([item.modelConfigName || item.provider, item.model]);
+      const detailMeta = [meta, item.source, item.error ? `${currentLanguage === "zh-CN" ? "异常" : "Error"}: ${item.error}` : ""]
+        .filter(Boolean)
+        .join(" 路 ");
       const roleLabel =
         item.kind === "synthesis"
           ? t("common.roleSynthesis")
@@ -1622,10 +2407,12 @@ function renderMessageStream() {
             </details>
           `
           : "";
-      const contentBody =
-        item.content || !item.isLoading
-          ? `<div class="ai-card-body">${escapeHtml(item.content || "")}</div>`
-          : loadingBody;
+      const contentBody = renderAssistantMessageContent({
+        content: item.content || "",
+        isLoading: item.isLoading,
+        kind: item.kind || "",
+        loadingBody
+      });
 
       return `
         <div class="message-row assistant">
@@ -1649,7 +2436,7 @@ function renderMessageStream() {
       )}</span>
                 <time class="message-time">${escapeHtml(formatMessageTime(item.createdAt))}</time>
               </div>
-              <div class="ai-card-meta">${escapeHtml(meta)}</div>
+              <div class="ai-card-meta">${escapeHtml(detailMeta)}</div>
             </div>
             ${
               item.kind === "synthesis"
@@ -1701,6 +2488,16 @@ function renderConfigGrid() {
   configGrid.innerHTML = getOrderedModelConfigs()
     .map(
       (item) => {
+        const testState = modelTestState[item.id] || {};
+        const testMessage = testState.message
+          ? `<p class="config-test-status ${escapeHtml(testState.status || "")}">${escapeHtml(testState.message)}</p>`
+          : "";
+        const backendHint =
+          runtimeMode === "frontend" && ["supercodex", "ice"].includes(String(item.provider || "").toLowerCase())
+            ? `<p class="config-backend-hint">${escapeHtml(t("common.backendRecommended"))} - ${escapeHtml(
+                t("common.backendRecommendedCopy")
+              )}</p>`
+            : "";
         const providerOptions = [...new Set([...PROVIDER_OPTIONS, item.provider].filter(Boolean))]
           .map(
             (provider) =>
@@ -1751,7 +2548,12 @@ function renderConfigGrid() {
             <label class="field-label">${escapeHtml(t("common.fieldApiKey"))}</label>
             <input class="text-input" data-field="apiKey" value="${escapeHtml(item.apiKey || "")}" />
           </div>
+          ${backendHint}
+          ${testMessage}
           <div class="config-card-actions">
+            <button class="ghost-button" data-action="test" type="button">${escapeHtml(
+              testState.status === "pending" ? t("common.testing") : t("common.testConfig")
+            )}</button>
             <button class="ghost-button" data-action="toggle" type="button">${escapeHtml(
               item.enabled ? t("common.disable") : t("common.enable")
             )}</button>
@@ -2053,6 +2855,14 @@ function loadConversationByIndex(index, { focus = false } = {}) {
       count: getConversationParticipants(session).length || session.models?.length || 0
     })
   );
+  if (session.groupSettingsSnapshot?.preferredPlatform) {
+    currentConversationGroupSettings.preferredPlatform = session.groupSettingsSnapshot.preferredPlatform;
+    draftGroupSettings.preferredPlatform = session.groupSettingsSnapshot.preferredPlatform;
+  }
+  if (typeof session.groupSettingsSnapshot?.platformFeatureEnabled === "boolean") {
+    currentConversationGroupSettings.platformFeatureEnabled = session.groupSettingsSnapshot.platformFeatureEnabled;
+    draftGroupSettings.platformFeatureEnabled = session.groupSettingsSnapshot.platformFeatureEnabled;
+  }
   renderConversationList();
   renderModelSummary();
   renderSynthesisOptions();
@@ -2074,6 +2884,8 @@ function persistConversation({
   const existingIndex = findHistoryIndexById(activeConversationId);
   const baseId = activeConversationId || createConversationId();
   const now = new Date().toISOString();
+  const preferredPlatform =
+    currentConversationGroupSettings.platformFeatureEnabled && getPreferredPlatformOption(currentConversationGroupSettings);
   const nextSession = {
     id: baseId,
     title:
@@ -2085,6 +2897,8 @@ function persistConversation({
     friendIds: activeFriends.map((item) => item.id),
     synthesisFriendId: synthesisFriend?.id || null,
     synthesisModel: synthesisFriend?.name || "",
+    preferredPlatformId: preferredPlatform?.id || "",
+    preferredPlatformName: preferredPlatform?.name || "",
     runtimeMode,
     createdAt: existingIndex >= 0 ? history[existingIndex].createdAt || createdAt : createdAt,
     updatedAt: now,
@@ -2140,6 +2954,9 @@ async function loadBackendState() {
       saveHistoryItems(conversationData.conversations);
     }
     reconcileGroupStates();
+    defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, friendProfiles);
+    currentConversationGroupSettings = normalizeGroupSettings(currentConversationGroupSettings, friendProfiles);
+    draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
     if (activeConversationId) {
       const nextIndex = findHistoryIndexById(activeConversationId);
       if (nextIndex >= 0) {
@@ -2255,6 +3072,8 @@ async function runWorkflow(options = {}) {
   const synthesisFriend =
     activeFriends.find((item) => item.id === (synthModelSelect?.value || currentConversationGroupSettings.synthesisFriendId)) ||
     activeFriends[0];
+  const platformContext = getPlatformRoutingContext(currentConversationGroupSettings);
+  const platformPromptAddon = buildPlatformPromptAddon(platformContext);
   currentConversationGroupSettings.synthesisFriendId = synthesisFriend.id;
   const userMessage = normalizeConversationMessage(
     { role: "user", kind: "user", content: prompt, createdAt },
@@ -2309,7 +3128,7 @@ async function runWorkflow(options = {}) {
   renderMessageStream();
 
   let results = [];
-  let mergedAnswer = t("common.mergedAnswer");
+  let mergedAnswer = buildFallbackSynthesis({ prompt, language: currentLanguage, results: [] });
   let disagreements = [t("common.d1"), t("common.d2"), t("common.d3")];
 
   try {
@@ -2335,9 +3154,11 @@ async function runWorkflow(options = {}) {
             baseUrl: friend.baseUrl,
             apiKey: friend.apiKey,
             systemPrompt:
-              currentConversationGroupSettings.sharedSystemPromptEnabled
-                ? currentConversationGroupSettings.sharedSystemPrompt
-                : friend.systemPrompt
+              `${
+                currentConversationGroupSettings.sharedSystemPromptEnabled
+                  ? currentConversationGroupSettings.sharedSystemPrompt
+                  : friend.systemPrompt
+              }${platformPromptAddon}`.trim()
           })),
           groupSettings: cloneGroupSettings(currentConversationGroupSettings)
         },
@@ -2402,21 +3223,9 @@ async function runWorkflow(options = {}) {
         }
       );
     } else {
-      results = activeFriends.map((friend) => {
-        const { thinking, content } = normalizeModelResult({ content: mockResponseFor(friend, prompt) });
-        return {
-          friendId: friend.id,
-          name: friend.name,
-          avatar: friend.avatar || friend.modelAvatar || "",
-          modelConfigId: friend.modelConfigId,
-          modelConfigName: friend.modelConfigName,
-          provider: friend.provider,
-          model: friend.model,
-          source: friend.apiKey ? t("common.configured") : t("common.mock"),
-          thinking,
-          content
-        };
-      });
+      results = await Promise.all(
+        activeFriends.map((friend) => generateFrontendFriendResponse(friend, prompt, platformContext))
+      );
 
       for (let index = 0; index < results.length; index += 1) {
         const result = results[index];
@@ -2427,13 +3236,25 @@ async function runWorkflow(options = {}) {
         await streamTextToMessage(targetId, result.content, "content");
         updateConversationMessageById(targetId, {
           source: result.source,
+          error: result.error || "",
           isLoading: false
         });
         renderMessageStream();
       }
 
+      const synthesisResult = await generateFrontendSynthesisResponse(
+        synthesisFriend,
+        prompt,
+        results,
+        platformContext
+      );
+      mergedAnswer = synthesisResult.content;
       await streamTextToMessage(synthesisPlaceholder.messageId, mergedAnswer, "content");
-      updateConversationMessageById(synthesisPlaceholder.messageId, { isLoading: false });
+      updateConversationMessageById(synthesisPlaceholder.messageId, {
+        source: synthesisResult.source,
+        error: synthesisResult.error || "",
+        isLoading: false
+      });
       renderMessageStream();
     }
 
@@ -2579,6 +3400,16 @@ function bindWorkspaceEvents() {
     draftGroupSettings.sharedSystemPrompt = groupSharedPrompt.value;
   });
 
+  groupPlatformToggle?.addEventListener("change", () => {
+    draftGroupSettings.platformFeatureEnabled = Boolean(groupPlatformToggle.checked);
+    renderGroupSettingsPanel();
+  });
+
+  groupPlatformSelect?.addEventListener("change", () => {
+    draftGroupSettings.preferredPlatform = groupPlatformSelect.value || PLATFORM_OPTIONS[0]?.id || "gemini";
+    renderGroupSettingsPanel();
+  });
+
   groupSynthesisSelect?.addEventListener("change", () => {
     draftGroupSettings.synthesisFriendId = groupSynthesisSelect.value || null;
   });
@@ -2687,6 +3518,7 @@ function bindSettingsEvents() {
       setRuntimeStatus(t("common.backendLoadFailed"));
     });
     rerenderAll();
+    await ensureFrontendAccess();
   });
 
   modelToggleGrid?.addEventListener("change", async (event) => {
@@ -2715,6 +3547,11 @@ function bindSettingsEvents() {
     if (button.dataset.action === "upload-avatar") {
       const input = configGrid.querySelector(`[data-avatar-input="${id}"]`);
       input?.click();
+      return;
+    }
+
+    if (button.dataset.action === "test") {
+      await runModelConnectionTest(id, card);
       return;
     }
 
@@ -2796,6 +3633,16 @@ function bindSettingsEvents() {
     pendingConfigFocusId = nextModel.id;
     saveModelConfigs();
     rerenderAll();
+  });
+
+  testEnabledModelsButton?.addEventListener("click", async () => {
+    const cards = Array.from(configGrid?.querySelectorAll("[data-id]") || []);
+    for (const card of cards) {
+      const id = card.dataset.id;
+      const item = modelConfigs.find((entry) => entry.id === id);
+      if (!id || !item?.enabled) continue;
+      await runModelConnectionTest(id, card);
+    }
   });
 }
 
@@ -2928,6 +3775,72 @@ function bindHistoryEvents() {
   });
 }
 
+function bindFrontendPasswordEvents() {
+  document.addEventListener(
+    "click",
+    (event) => {
+      guardFrontendAccess(event);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      guardFrontendAccess(event);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "submit",
+    (event) => {
+      guardFrontendAccess(event);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!frontendAccessBlocked) return;
+      if (frontendPasswordModal?.contains(event.target)) return;
+      const allowedKeys = new Set(["Tab", "Escape"]);
+      if (!allowedKeys.has(event.key)) {
+        guardFrontendAccess(event);
+      }
+    },
+    true
+  );
+
+  frontendPasswordSubmit?.addEventListener("click", async () => {
+    if (!frontendPasswordHash) {
+      updateFrontendPasswordError(t("common.frontendPasswordMissing"));
+      return;
+    }
+    const password = frontendPasswordInput?.value || "";
+    const passed = await validateFrontendPassword(password);
+    if (!passed) {
+      updateFrontendPasswordError(t("common.frontendPasswordInvalid"));
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.frontendAccess, frontendPasswordHash);
+    updateFrontendPasswordError("");
+    if (frontendPasswordInput) frontendPasswordInput.value = "";
+    setFrontendPasswordModalVisible(false);
+  });
+
+  frontendPasswordInput?.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    await frontendPasswordSubmit?.click();
+  });
+
+  frontendPasswordBackdrop?.addEventListener("click", (event) => {
+    event.preventDefault();
+  });
+}
+
 function bindUserMenu() {
   if (!userBarTrigger) return;
   userBarTrigger.addEventListener("click", (event) => {
@@ -2989,6 +3902,9 @@ async function initializeApp() {
     await loadBackendState();
   }
 
+  await loadLocalModelConfigFile();
+  await loadFrontendPasswordHash();
+
   applyLanguage();
   renderAccount();
   renderRuntime();
@@ -3016,7 +3932,10 @@ async function initializeApp() {
   bindFriendEvents();
   bindAccountEvents();
   bindHistoryEvents();
+  bindFrontendPasswordEvents();
   bindUserMenu();
+
+  await ensureFrontendAccess();
 }
 
 initializeApp();

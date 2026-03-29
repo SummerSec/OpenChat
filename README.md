@@ -58,6 +58,61 @@ Default ports:
 - Vite frontend: `http://127.0.0.1:4173`
 - Node backend: `http://127.0.0.1:8787`
 
+## Frontend Password Gate
+
+Frontend mode can require a global password check before any page becomes usable.
+
+- Passwords are compared by `MD5`
+- The unlocked state is stored in `localStorage`, so it remains valid long-term in the same browser
+- Backend mode is not gated by this frontend-only password layer
+
+Configuration priority:
+
+1. `VITE_FRONTEND_PASSWORD_MD5` environment variable
+2. `public/frontend-auth.json`
+
+### Vercel or other hosted frontend builds
+
+Set:
+
+```bash
+VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
+```
+
+### Local deployment
+
+Edit:
+
+`public/frontend-auth.json`
+
+Example:
+
+```json
+{
+  "frontendPasswordMd5": "5f4dcc3b5aa765d61d8327deb882cf99"
+}
+```
+
+You can generate an MD5 hash with Node:
+
+```bash
+node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
+```
+
+## Local Model Bootstrap
+
+Frontend mode now auto-loads `public/openchat.local-models.json` on first use when the browser does not already have model configs in `localStorage`.
+
+- This is intended for local bootstrap and demo setup
+- Existing saved model configs in the browser are not overwritten
+- To re-apply the file, clear the saved model config key from `localStorage`
+
+Current local bootstrap file:
+
+- `public/openchat.local-models.json`
+
+For OpenAI-compatible gateways, prefer the full API base path, usually ending in `/v1`.
+
 ## Build
 
 ```bash
@@ -139,6 +194,8 @@ When a provider is not fully configured, the app can fall back to mock responses
 - The workspace supports renaming, pinning, sharing, deleting, and clearing history
 - In backend mode, history edits now sync back to the server through `POST /api/conversations`
 - If backend loading fails, the UI falls back to frontend mode and keeps local state usable
+- AI Search Hub can be vendored under `vendor/ai-search-hub` and used as an optional backend bridge for platform-aware runs
+- To enable real platform execution, install Python Playwright in the local environment used by `py` and ensure the target platform site can be opened and logged in
 
 ## Deploy
 

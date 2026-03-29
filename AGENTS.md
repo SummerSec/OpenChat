@@ -204,3 +204,11 @@ If these files are added later, treat them as additional repository instructions
 - Safe default: preserve compatibility with both runtime modes unless the task explicitly targets one mode
 - Safe default: keep secrets out of the repo and out of commits
 - Safe default: if there is a choice between a tiny targeted utility and more branching in a large file, choose the option that best matches current repository patterns
+
+## Worktree And Branch Policy
+
+- Every model or agent must work in its own dedicated git worktree; do not share a worktree between multiple models
+- Each model-specific worktree must be created from the `dev` branch
+- Do not implement work directly on the primary checkout when a model-specific worktree is available or expected
+- Keep each model's changes isolated to its own branch and worktree until review is complete
+- The user is responsible for merging branches; agents must not merge branches on the user's behalf unless the user explicitly asks for that action

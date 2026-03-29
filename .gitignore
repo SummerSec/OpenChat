@@ -11,3 +11,4 @@ public/
 .playwright-cli/
 .worktrees/
 .worktrees/**
+docs/superpowers/

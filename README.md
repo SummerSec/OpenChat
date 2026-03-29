@@ -84,11 +84,11 @@ npm run dev:server
 VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
 ```
 
-本地部署可编辑：
+Create or update:
 
 `public/frontend-auth.json`
 
-示例：
+Expected shape:
 
 ```json
 {
@@ -96,7 +96,9 @@ VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
 }
 ```
 
-可使用 Node 生成 MD5：
+Do not commit a real password hash that you actively use.
+
+You can generate an MD5 hash with Node:
 
 ```bash
 node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"

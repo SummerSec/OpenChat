@@ -10,10 +10,10 @@ import {
   buildSynthesisPayload,
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
-import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
 import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
+import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",

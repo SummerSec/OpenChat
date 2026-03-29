@@ -40,6 +40,10 @@ body {
   overflow: hidden;
 }
 
+html {
+  font-size: 15px;
+}
+
 body {
   text-rendering: optimizeLegibility;
 }
@@ -286,7 +290,7 @@ a {
 .page-header h1 {
   margin: 8px 0 10px;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-size: clamp(1.8rem, 2.6vw, 2.45rem);
   letter-spacing: -0.03em;
 }
 
@@ -1248,7 +1252,7 @@ body.frontend-access-locked #frontend-password-modal {
   margin: 0;
   max-width: 680px;
   font-family: var(--font-display);
-  font-size: clamp(1.9rem, 2.8vw, 2.8rem);
+  font-size: clamp(1.72rem, 2.5vw, 2.4rem);
   line-height: 1.04;
   letter-spacing: -0.04em;
 }
@@ -1380,7 +1384,7 @@ body.frontend-access-locked #frontend-password-modal {
   display: block;
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 3vw, 2.9rem);
+  font-size: clamp(1.8rem, 2.6vw, 2.5rem);
   letter-spacing: -0.03em;
 }
 
@@ -1578,11 +1582,10 @@ body.frontend-access-locked #frontend-password-modal {
   color: var(--text);
   line-height: 1.66;
   font-size: 0.9rem;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.synthesis-card {
+.ai-card {
   --markdown-heading: var(--text);
   --markdown-strong: var(--text);
   --markdown-muted: var(--muted);
@@ -1596,24 +1599,52 @@ body.frontend-access-locked #frontend-password-modal {
   --markdown-code-bg: rgba(77, 107, 254, 0.08);
 }
 
-.synthesis-card .markdown-content {
+.ai-card .markdown-content {
   white-space: normal;
 }
 
-.synthesis-card .markdown-content > :first-child {
+.ai-card .markdown-content-plain {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.ai-card .markdown-content-plain p {
+  margin: 0;
+}
+
+.ai-card .markdown-content-plain p + p {
+  margin-top: 0.75em;
+}
+
+.ai-card .markdown-content-plain ul,
+.ai-card .markdown-content-plain ol {
+  margin: 0.35em 0 0.8em;
+}
+
+.ai-card .markdown-content-plain pre {
+  margin: 0.75em 0;
+}
+
+.ai-card .markdown-content-rich {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.ai-card .markdown-content > :first-child {
+
   margin-top: 0;
 }
 
-.synthesis-card .markdown-content > :last-child {
+.ai-card .markdown-content > :last-child {
   margin-bottom: 0;
 }
 
-.synthesis-card .markdown-content h1,
-.synthesis-card .markdown-content h2,
-.synthesis-card .markdown-content h3,
-.synthesis-card .markdown-content h4,
-.synthesis-card .markdown-content h5,
-.synthesis-card .markdown-content h6 {
+.ai-card .markdown-content h1,
+.ai-card .markdown-content h2,
+.ai-card .markdown-content h3,
+.ai-card .markdown-content h4,
+.ai-card .markdown-content h5,
+.ai-card .markdown-content h6 {
   margin: 1.4em 0 0.65em;
   color: var(--markdown-heading);
   font-family: var(--font-display);
@@ -1622,41 +1653,41 @@ body.frontend-access-locked #frontend-password-modal {
   line-height: 1.2;
 }
 
-.synthesis-card .markdown-content h1 {
+.ai-card .markdown-content h1 {
   font-size: 1.55rem;
 }
 
-.synthesis-card .markdown-content h2 {
+.ai-card .markdown-content h2 {
   font-size: 1.28rem;
 }
 
-.synthesis-card .markdown-content h3 {
+.ai-card .markdown-content h3 {
   font-size: 1.08rem;
 }
 
-.synthesis-card .markdown-content p,
-.synthesis-card .markdown-content ul,
-.synthesis-card .markdown-content ol,
-.synthesis-card .markdown-content blockquote,
-.synthesis-card .markdown-content pre,
-.synthesis-card .markdown-content table {
+.ai-card .markdown-content p,
+.ai-card .markdown-content ul,
+.ai-card .markdown-content ol,
+.ai-card .markdown-content blockquote,
+.ai-card .markdown-content pre,
+.ai-card .markdown-content table {
   margin: 0 0 1em;
 }
 
-.synthesis-card .markdown-content ul,
-.synthesis-card .markdown-content ol {
+.ai-card .markdown-content ul,
+.ai-card .markdown-content ol {
   padding-left: 1.35rem;
 }
 
-.synthesis-card .markdown-content li + li {
+.ai-card .markdown-content li + li {
   margin-top: 0.4em;
 }
 
-.synthesis-card .markdown-content li::marker {
+.ai-card .markdown-content li::marker {
   color: var(--markdown-accent);
 }
 
-.synthesis-card .markdown-content a {
+.ai-card .markdown-content a {
   color: var(--markdown-accent);
   font-weight: 600;
   text-decoration: underline;
@@ -1664,15 +1695,15 @@ body.frontend-access-locked #frontend-password-modal {
   text-underline-offset: 0.16em;
 }
 
-.synthesis-card .markdown-content a:hover {
+.ai-card .markdown-content a:hover {
   color: var(--markdown-accent-strong);
 }
 
-.synthesis-card .markdown-content strong {
+.ai-card .markdown-content strong {
   color: var(--markdown-strong);
 }
 
-.synthesis-card .markdown-content blockquote {
+.ai-card .markdown-content blockquote {
   padding: 0.9rem 1rem;
   border-left: 4px solid var(--markdown-border-strong);
   border-radius: 0 16px 16px 0;
@@ -1680,13 +1711,13 @@ body.frontend-access-locked #frontend-password-modal {
   color: var(--markdown-muted);
 }
 
-.synthesis-card .markdown-content hr {
+.ai-card .markdown-content hr {
   margin: 1.4em 0;
   border: 0;
   border-top: 1px solid var(--markdown-border-soft);
 }
 
-.synthesis-card .markdown-content code {
+.ai-card .markdown-content code {
   padding: 0.14rem 0.42rem;
   border-radius: 8px;
   background: var(--markdown-code-bg);
@@ -1695,7 +1726,7 @@ body.frontend-access-locked #frontend-password-modal {
   font-size: 0.92em;
 }
 
-.synthesis-card .markdown-content pre {
+.ai-card .markdown-content pre {
   overflow-x: auto;
   padding: 1rem 1.05rem;
   border: 1px solid var(--markdown-border-subtle);
@@ -1704,7 +1735,7 @@ body.frontend-access-locked #frontend-password-modal {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.synthesis-card .markdown-content pre code {
+.ai-card .markdown-content pre code {
   display: block;
   padding: 0;
   background: transparent;
@@ -1712,7 +1743,7 @@ body.frontend-access-locked #frontend-password-modal {
   white-space: pre;
 }
 
-.synthesis-card .markdown-content table {
+.ai-card .markdown-content table {
   width: 100%;
   border-collapse: collapse;
   overflow: hidden;
@@ -1720,20 +1751,20 @@ body.frontend-access-locked #frontend-password-modal {
   border: 1px solid var(--markdown-border-subtle);
 }
 
-.synthesis-card .markdown-content th,
-.synthesis-card .markdown-content td {
+.ai-card .markdown-content th,
+.ai-card .markdown-content td {
   padding: 0.7rem 0.8rem;
   text-align: left;
   border-bottom: 1px solid var(--markdown-border-faint);
 }
 
-.synthesis-card .markdown-content th {
+.ai-card .markdown-content th {
   background: var(--markdown-code-bg);
   color: var(--markdown-strong);
   font-weight: 700;
 }
 
-.synthesis-card .markdown-content tr:last-child td {
+.ai-card .markdown-content tr:last-child td {
   border-bottom: 0;
 }
 
@@ -1814,13 +1845,62 @@ body.frontend-access-locked #frontend-password-modal {
   gap: 10px;
 }
 
+.group-member-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(230, 235, 244, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.group-member-summary-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.group-member-summary-copy strong {
+  font-size: 0.94rem;
+}
+
+.group-member-summary-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.group-member-details {
+  display: grid;
+  gap: 10px;
+}
+
+.group-member-details[hidden] {
+  display: none;
+}
+
 .group-member-option {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(230, 235, 244, 0.9);
   background: rgba(255, 255, 255, 0.96);
+  justify-content: space-between;
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.group-member-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .group-member-option:hover {
@@ -1975,7 +2055,21 @@ body.frontend-access-locked #frontend-password-modal {
   color: var(--muted);
   font-size: 0.79rem;
   line-height: 1.6;
-  white-space: pre-wrap;
+}
+
+.think-content .ai-card-body {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.think-content .markdown-content {
+  color: inherit;
+}
+
+.streamdown-target:empty::before {
+  content: "";
+  display: block;
 }
 
 .think-empty-state {

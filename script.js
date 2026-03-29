@@ -13,7 +13,7 @@ import {
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
 import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
-import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+import { renderAiMessageMarkdown } from "./ai-message-streamdown.jsx";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -371,6 +371,9 @@ const I18N = {
       deletedConversation: "\u5df2\u5220\u9664\u4f1a\u8bdd",
       groupSettingsSaved: "\u5df2\u4fdd\u5b58\u4e3a\u9ed8\u8ba4\u7fa4\u8bbe\u7f6e",
       conversationGroupApplied: "\u5df2\u5e94\u7528\u5230\u5f53\u524d\u4f1a\u8bdd",
+      synthesisFriendCurrent: "\u6574\u5408\u7fa4\u53cb\uff1a{name}",
+      viewMemberDetails: "\u67e5\u770b\u8be6\u60c5",
+      hideMemberDetails: "\u6536\u8d77\u8be6\u60c5",
       backendLoadFailed: "\u65e0\u6cd5\u8fde\u63a5\u540e\u7aef\uff0c\u5df2\u5207\u56de\u524d\u7aef\u6a21\u5f0f\u3002",
       backendSyncFailed: "\u540e\u7aef\u540c\u6b65\u5931\u8d25\uff0c\u5f53\u524d\u6539\u52a8\u4ec5\u4fdd\u5b58\u5728\u672c\u5730\u3002",
       frontendPasswordTitle: "\u524d\u7aef\u8bbf\u95ee\u9a8c\u8bc1",
@@ -559,6 +562,9 @@ const I18N = {
       deletedConversation: "Conversation deleted",
       groupSettingsSaved: "Saved as default group settings",
       conversationGroupApplied: "Applied to the current conversation",
+      synthesisFriendCurrent: "Synthesis friend: {name}",
+      viewMemberDetails: "View details",
+      hideMemberDetails: "Hide details",
       backendLoadFailed: "Could not reach the backend. Switched back to frontend mode.",
       backendSyncFailed: "Backend sync failed. Changes are only saved locally.",
       frontendPasswordTitle: "Frontend access check",
@@ -677,6 +683,7 @@ let expandedHistoryIndex = null;
 let pendingConfigFocusId = null;
 let pendingFriendFocusId = null;
 let isGroupSettingsOpen = false;
+let isGroupMemberDetailsOpen = false;
 let isRunning = false;
 let messageIdSeed = 0;
 
@@ -907,22 +914,27 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
-function renderSynthesisContent(content = "") {
-  try {
-    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
-  } catch {
-    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
-  }
+function encodeMessageField(value = "") {
+  return escapeHtml(String(value ?? ""));
 }
 
-function renderAssistantMessageContent({ content = "", isLoading = false, kind = "", loadingBody = "" } = {}) {
+function renderAssistantMessageContent({
+  content = "",
+  isLoading = false,
+  kind = "",
+  loadingBody = "",
+  messageId = "",
+  field = "content"
+} = {}) {
   if (!content && isLoading) {
     return loadingBody;
   }
 
-  return kind === "synthesis"
-    ? renderSynthesisContent(content || "")
-    : `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+  return `<div class="ai-card-body markdown-content streamdown-target" data-message-id="${encodeMessageField(
+    messageId
+  )}" data-field="${encodeMessageField(field)}" data-kind="${encodeMessageField(
+    kind || "assistant"
+  )}" data-loading="${isLoading ? "true" : "false"}" data-content="${encodeMessageField(content || "")}"></div>`;
 }
 
 function sleep(ms) {
@@ -2169,28 +2181,26 @@ function renderGroupSettingsPanel() {
 
   if (groupMemberPicker) {
     const availableFriends = getEnabledFriends();
-    groupMemberPicker.innerHTML = availableFriends.length
+    const synthesisFriend = availableFriends.find((friend) => friend.id === draftGroupSettings.synthesisFriendId) || null;
+    const detailToggleLabel = t(isGroupMemberDetailsOpen ? "common.hideMemberDetails" : "common.viewMemberDetails");
+    const detailsMarkup = availableFriends.length
       ? availableFriends
           .map((friend) => {
             const checked = draftGroupSettings.memberIds.includes(friend.id);
             const model = getModelConfigById(friend.modelConfigId);
+            const modelLabel = model?.model || model?.id || friend.modelConfigId || "";
+            const synthesisBadge =
+              friend.id === draftGroupSettings.synthesisFriendId
+                ? `<span class="group-member-badge">${escapeHtml(t("home.synthesisFriend"))}</span>`
+                : "";
             return `
               <label class="group-member-option">
-                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${
-              checked ? "checked" : ""
-            } />
-                <span class="conversation-icon">
-                  ${renderProviderIcon(
-                    friend.name,
-                    model?.provider || "",
-                    friend.name.slice(0, 2).toUpperCase(),
-                    friend.avatar || model?.avatar || ""
-                  )}
-                </span>
+                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${checked ? "checked" : ""} />
                 <span class="group-member-copy">
                   <strong>${escapeHtml(friend.name)}</strong>
-                  <span>${escapeHtml(model?.name || "")}</span>
+                  <span>${escapeHtml(modelLabel)}</span>
                 </span>
+                ${synthesisBadge}
               </label>
             `;
           })
@@ -2198,6 +2208,16 @@ function renderGroupSettingsPanel() {
       : `<article class="history-item"><strong>${escapeHtml(t("common.noFriendsTitle"))}</strong><p>${escapeHtml(
           t("common.noFriendsCopy")
         )}</p></article>`;
+    groupMemberPicker.innerHTML = `
+      <div class="group-member-summary-card">
+        <div class="group-member-summary-copy">
+          <strong>${escapeHtml(t("common.friendsSelected", { count: availableFriends.length }))}</strong>
+          <span>${escapeHtml(t("common.synthesisFriendCurrent", { name: synthesisFriend?.name || "-" }))}</span>
+        </div>
+        <button class="ghost-button" type="button" data-group-member-toggle>${escapeHtml(detailToggleLabel)}</button>
+      </div>
+      <div class="group-member-details" ${isGroupMemberDetailsOpen ? "" : "hidden"}>${detailsMarkup}</div>
+    `;
   }
 
   if (groupSharedToggle) {
@@ -2480,7 +2500,14 @@ function renderMessageStream() {
           ? `
             <details class="think-block">
               <summary class="think-summary">${escapeHtml(t("common.thinking"))}</summary>
-              <div class="think-content">${escapeHtml(item.thinking)}</div>
+              ${renderAssistantMessageContent({
+                content: item.thinking,
+                isLoading: false,
+                kind: `${item.kind || "assistant"}-thinking`,
+                loadingBody: "",
+                messageId: item.messageId,
+                field: "thinking"
+              })}
             </details>
           `
           : "";
@@ -2488,7 +2515,9 @@ function renderMessageStream() {
         content: item.content || "",
         isLoading: item.isLoading,
         kind: item.kind || "",
-        loadingBody
+        loadingBody,
+        messageId: item.messageId,
+        field: "content"
       });
       const thinkingState = item.thinkingEnabled
         ? hasThinkingContent(item)
@@ -2560,6 +2589,7 @@ function renderMessageStream() {
     })
     .join("");
 
+  renderAiMessageMarkdown(messageStream);
   scrollMessageStreamToBottom();
 }
 
@@ -2598,12 +2628,6 @@ function renderConfigGrid() {
         const testMessage = testState.message
           ? `<p class="config-test-status ${escapeHtml(testState.status || "")}">${escapeHtml(testState.message)}</p>`
           : "";
-        const backendHint =
-          runtimeMode === "frontend" && ["supercodex", "ice"].includes(String(item.provider || "").toLowerCase())
-            ? `<p class="config-backend-hint">${escapeHtml(t("common.backendRecommended"))} - ${escapeHtml(
-                t("common.backendRecommendedCopy")
-              )}</p>`
-            : "";
         const providerOptions = [...new Set([...PROVIDER_OPTIONS, item.provider].filter(Boolean))]
           .map(
             (provider) =>
@@ -2658,7 +2682,6 @@ function renderConfigGrid() {
               <span>${escapeHtml(t("common.fieldThinking"))}</span>
             </label>
           </div>
-          ${backendHint}
           ${testMessage}
           <div class="config-card-actions">
             <button class="ghost-button" data-action="test" type="button">${escapeHtml(
@@ -3504,11 +3527,22 @@ function bindWorkspaceEvents() {
   groupSettingsToggleButton?.addEventListener("click", () => {
     isGroupSettingsOpen = !isGroupSettingsOpen;
     draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
+    if (!isGroupSettingsOpen) {
+      isGroupMemberDetailsOpen = false;
+    }
     renderGroupSettingsPanel();
   });
 
   groupSettingsCloseButton?.addEventListener("click", () => {
     isGroupSettingsOpen = false;
+    isGroupMemberDetailsOpen = false;
+    renderGroupSettingsPanel();
+  });
+
+  groupMemberPicker?.addEventListener("click", (event) => {
+    const toggleButton = event.target.closest("[data-group-member-toggle]");
+    if (!toggleButton) return;
+    isGroupMemberDetailsOpen = !isGroupMemberDetailsOpen;
     renderGroupSettingsPanel();
   });
 

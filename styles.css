@@ -1814,13 +1814,62 @@ body.frontend-access-locked #frontend-password-modal {
   gap: 10px;
 }
 
+.group-member-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(230, 235, 244, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.group-member-summary-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.group-member-summary-copy strong {
+  font-size: 0.94rem;
+}
+
+.group-member-summary-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.group-member-details {
+  display: grid;
+  gap: 10px;
+}
+
+.group-member-details[hidden] {
+  display: none;
+}
+
 .group-member-option {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(230, 235, 244, 0.9);
   background: rgba(255, 255, 255, 0.96);
+  justify-content: space-between;
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.group-member-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .group-member-option:hover {

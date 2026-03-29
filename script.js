@@ -11,6 +11,9 @@ import {
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
 import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
+import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
+import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -305,6 +308,7 @@ const I18N = {
       running: "\u6b63\u5728\u8fd0\u884c {count} \u4f4d\u7fa4\u53cb",
       completed: "\u5df2\u5b8c\u6210 {count} \u4f4d\u7fa4\u53cb",
       needPrompt: "\u9700\u8981\u8f93\u5165 prompt \u5e76\u81f3\u5c11\u9009\u62e9\u4e00\u4f4d\u7fa4\u53cb",
+      needExistingFriends: "\u5f53\u524d\u8fd8\u6ca1\u6709 AI \u7fa4\u53cb\uff0c\u8bf7\u5148\u5728\u7fa4\u53cb\u9875\u521b\u5efa\u7fa4\u53cb\u3002",
       synthesis: "\u6574\u5408",
       mock: "\u6a21\u62df\u7ed3\u679c",
       configured: "\u5df2\u914d\u7f6e",
@@ -379,6 +383,7 @@ const I18N = {
       frontendPasswordInvalid: "\u5bc6\u7801\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5\u3002",
       frontendPasswordMissing: "\u672a\u914d\u7f6e\u524d\u7aef\u8bbf\u95ee\u5bc6\u7801\uff0c\u8bf7\u68c0\u67e5\u73af\u5883\u53d8\u91cf\u6216 frontend-auth.json\u3002",
       fieldDisplayName: "\u663e\u793a\u540d\u79f0",
+      fieldThinking: "\u5f00\u542f Think",
       fieldProvider: "Provider",
       fieldAvatar: "\u6a21\u578b\u5934\u50cf",
       uploadAvatar: "\u4e0a\u4f20\u5934\u50cf",
@@ -494,6 +499,7 @@ const I18N = {
       running: "Running {count} friends",
       completed: "Completed {count} friends",
       needPrompt: "Need a prompt and at least one selected friend",
+      needExistingFriends: "No AI friends exist yet. Create friends on the Friends page first.",
       synthesis: "synthesis",
       mock: "mock",
       configured: "configured",
@@ -565,6 +571,7 @@ const I18N = {
       frontendPasswordInvalid: "Incorrect password. Try again.",
       frontendPasswordMissing: "No frontend password hash is configured. Check the environment variable or frontend-auth.json.",
       fieldDisplayName: "Display name",
+      fieldThinking: "Enable thinking",
       fieldProvider: "Provider",
       fieldAvatar: "Avatar",
       uploadAvatar: "Upload avatar",
@@ -650,13 +657,14 @@ let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
 let frontendPasswordHash = "";
 let frontendAccessBlocked = false;
 let modelTestState = {};
-let modelConfigs = normalizeModelConfigs(readJson(STORAGE_KEYS.models, cloneDefaultModels()));
+writeJson(STORAGE_KEYS.account, getScopedAccount());
+let modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, cloneDefaultModels()));
 let friendProfiles = normalizeFriendProfiles(
-  readJson(STORAGE_KEYS.friends, createDefaultFriendProfiles(modelConfigs)),
+  readScopedJson(STORAGE_KEYS.friends, createDefaultFriendProfiles(modelConfigs)),
   modelConfigs
 );
 let defaultGroupSettings = normalizeGroupSettings(
-  readJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
+  readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
   friendProfiles
 );
 let currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
@@ -720,6 +728,7 @@ function cloneGroupSettings(settings = {}) {
 function normalizeModelConfig(item = {}) {
   return {
     avatar: "",
+    thinkingEnabled: normalizeThinkingEnabled(item.thinkingEnabled, false),
     ...item
   };
 }
@@ -774,7 +783,7 @@ function shouldBootstrapLocalModels(storedModelsRaw = localStorage.getItem(STORA
 }
 
 function saveModelConfigs() {
-  writeJson(STORAGE_KEYS.models, modelConfigs);
+  writeScopedJson(STORAGE_KEYS.models, modelConfigs);
 }
 
 function getFriendProfiles() {
@@ -782,11 +791,11 @@ function getFriendProfiles() {
 }
 
 function saveFriendProfiles() {
-  writeJson(STORAGE_KEYS.friends, friendProfiles);
+  writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
 }
 
 function saveDefaultGroupSettings() {
-  writeJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
+  writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
 }
 
 function getFriendById(id, items = friendProfiles) {
@@ -862,6 +871,25 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function getScopedAccount() {
+  return normalizeLocalAccount(readJson(STORAGE_KEYS.account, null) || {});
+}
+
+function getScopedStorageKey(key) {
+  if ([STORAGE_KEYS.runtime, STORAGE_KEYS.language, STORAGE_KEYS.frontendAccess, STORAGE_KEYS.account].includes(key)) {
+    return key;
+  }
+  return buildScopedStorageKey(key, getScopedAccount());
+}
+
+function readScopedJson(key, fallback) {
+  return readJson(getScopedStorageKey(key), fallback);
+}
+
+function writeScopedJson(key, value) {
+  writeJson(getScopedStorageKey(key), value);
+}
+
 function t(path, vars = {}) {
   const raw = path.split(".").reduce((acc, key) => acc?.[key], I18N[currentLanguage]) || path;
   return Object.entries(vars).reduce(
@@ -911,11 +939,11 @@ function createConversationId() {
 }
 
 function getHistoryItems() {
-  return readJson(STORAGE_KEYS.history, []);
+  return readScopedJson(STORAGE_KEYS.history, []);
 }
 
 function saveHistoryItems(items) {
-  writeJson(STORAGE_KEYS.history, items.slice(0, 50));
+  writeScopedJson(STORAGE_KEYS.history, items.slice(0, 50));
 }
 
 function handleBackendSyncError(error) {
@@ -1053,13 +1081,34 @@ async function loadLocalModelConfigFile() {
     if (!response.ok) return;
     const config = await response.json();
     const nextModels = normalizeModelConfigs(Array.isArray(config?.models) ? config.models : []);
-    if (!shouldBootstrapLocalModels(localStorage.getItem(STORAGE_KEYS.models), nextModels)) return;
+    if (!shouldBootstrapLocalModels(localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.models)), nextModels)) return;
     modelConfigs = nextModels;
     saveModelConfigs();
+    if (shouldBootstrapDefaultFriends(localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.friends)), nextModels)) {
+      friendProfiles = createDefaultFriendProfiles(modelConfigs);
+      saveFriendProfiles();
+    }
     reconcileGroupStates();
   } catch (error) {
     console.warn("Failed to load local model config file:", error);
   }
+}
+
+function reloadScopedLocalState() {
+  modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, []));
+  friendProfiles = normalizeFriendProfiles(
+    readScopedJson(STORAGE_KEYS.friends, []),
+    modelConfigs
+  );
+  defaultGroupSettings = normalizeGroupSettings(
+    readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
+    friendProfiles
+  );
+  currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
+  draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
+  currentConversation = [];
+  activeConversationId = null;
+  activeHistoryIndex = null;
 }
 
 function updateFrontendPasswordError(message = "") {
@@ -1139,7 +1188,7 @@ async function switchRuntimeMode(nextMode) {
 }
 
 function getAccount() {
-  return readJson(STORAGE_KEYS.account, null);
+  return normalizeLocalAccount(readJson(STORAGE_KEYS.account, null) || {});
 }
 
 function getActiveModels() {
@@ -1183,6 +1232,7 @@ function buildFriendSnapshot(friend) {
     modelConfigName: model?.name || "",
     provider: model?.provider || "",
     model: model?.model || "",
+    thinkingEnabled: Boolean(model?.thinkingEnabled),
     systemPrompt: friend.systemPrompt || "",
     enabled: friend.enabled !== false,
     description: friend.description || ""
@@ -1242,6 +1292,7 @@ function resolveConversationFriends(settings = getActiveGroupSettings()) {
         model: model?.model || "",
         baseUrl: model?.baseUrl || "",
         apiKey: model?.apiKey || "",
+        thinkingEnabled: Boolean(model?.thinkingEnabled),
         modelAvatar: model?.avatar || ""
       };
     })
@@ -1498,6 +1549,7 @@ function normalizeConversationMessage(message = {}, fallbackDate = new Date().to
     modelConfigName: message.modelConfigName || "",
     provider: message.provider || "",
     model: message.model || "",
+    thinkingEnabled: Boolean(message.thinkingEnabled),
     source: message.source || "",
     error: message.error || "",
     content: String(message.content || ""),
@@ -1528,6 +1580,7 @@ function buildConversationFromSession(session = {}) {
               entry.modelConfigName || friendMap.get(entry.friendId)?.modelConfigName || entry.modelName || "",
             provider: entry.provider,
             model: entry.model,
+            thinkingEnabled: Boolean(entry.thinkingEnabled),
             source: entry.source,
             error: entry.error || "",
             content: entry.content,
@@ -1567,6 +1620,7 @@ function buildConversationFromSession(session = {}) {
           getSessionSynthesisFriend(session)?.model ||
           modelConfigs.find((item) => item.name === session.synthesisModel)?.model ||
           "",
+        thinkingEnabled: Boolean(getSessionSynthesisFriend(session)?.thinkingEnabled),
         content: session.mergedAnswer || "",
         createdAt: fallbackDate
       },
@@ -1586,6 +1640,7 @@ function serializeConversation(messages = []) {
     modelConfigName: message.modelConfigName,
     provider: message.provider,
     model: message.model,
+    thinkingEnabled: message.thinkingEnabled,
     source: message.source,
     error: message.error,
     content: message.content,
@@ -1760,7 +1815,7 @@ function buildPlatformSourceLabel(platformContext, baseSource) {
   return `${baseSource} · ${platformContext.name}`;
 }
 
-async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "") {
+async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "", options = {}) {
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
@@ -1774,7 +1829,8 @@ async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "") {
     },
     body: JSON.stringify({
       model: model.model,
-      messages
+      messages,
+      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
     })
   });
   if (!response.ok) {
@@ -1802,7 +1858,7 @@ async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "") {
   return { content: content.trim(), thinking: thinking.trim() };
 }
 
-async function callAnthropicFrontend(model, prompt, systemPrompt = "") {
+async function callAnthropicFrontend(model, prompt, systemPrompt = "", options = {}) {
   const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/messages`, {
     method: "POST",
     headers: {
@@ -1814,6 +1870,7 @@ async function callAnthropicFrontend(model, prompt, systemPrompt = "") {
       model: model.model,
       max_tokens: 1200,
       system: systemPrompt || undefined,
+      ...(options.thinkingEnabled ? { thinking: { type: "enabled", budget_tokens: 1024 } } : {}),
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -1843,7 +1900,8 @@ async function callAnthropicFrontend(model, prompt, systemPrompt = "") {
   };
 }
 
-async function callGeminiFrontend(model, prompt, systemPrompt = "") {
+async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}) {
+  void options;
   const response = await fetch(
     `${String(model.baseUrl || "").replace(/\/+$/, "")}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
     {
@@ -1911,11 +1969,17 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
     let output;
     const providerKind = detectProviderKind(friend);
     if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(friend, prompt, systemPrompt);
+      output = await callAnthropicFrontend(friend, prompt, systemPrompt, {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(friend, prompt, systemPrompt);
+      output = await callGeminiFrontend(friend, prompt, systemPrompt, {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     } else {
-      output = await callOpenAICompatibleFrontend(friend, prompt, systemPrompt);
+      output = await callOpenAICompatibleFrontend(friend, prompt, systemPrompt, {
+        thinkingEnabled: Boolean(friend.thinkingEnabled)
+      });
     }
     return {
       friendId: friend.id,
@@ -1926,7 +1990,7 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
       provider: friend.provider,
       model: friend.model,
       source: buildPlatformSourceLabel(platformContext, t("common.configured")),
-      thinking: output.thinking || "",
+      thinking: friend.thinkingEnabled ? output.thinking || "" : "",
       content: output.content || mockResponseFor(friend, prompt, platformContext),
       error: ""
     };
@@ -1983,11 +2047,17 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
     let output;
     const providerKind = detectProviderKind(synthesisFriend);
     if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+      output = await callAnthropicFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
+        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
+      });
     } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+      output = await callGeminiFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
+        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
+      });
     } else {
-      output = await callOpenAICompatibleFrontend(synthesisFriend, synthesisPrompt, systemPrompt);
+      output = await callOpenAICompatibleFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
+        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
+      });
     }
     return {
       content: output.content || buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
@@ -2015,11 +2085,17 @@ async function testModelConnection(model) {
     const providerKind = detectProviderKind(model);
     let output;
     if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(model, prompt, "");
+      output = await callAnthropicFrontend(model, prompt, "", {
+        thinkingEnabled: Boolean(model.thinkingEnabled)
+      });
     } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(model, prompt, "");
+      output = await callGeminiFrontend(model, prompt, "", {
+        thinkingEnabled: Boolean(model.thinkingEnabled)
+      });
     } else {
-      output = await callOpenAICompatibleFrontend(model, prompt, "");
+      output = await callOpenAICompatibleFrontend(model, prompt, "", {
+        thinkingEnabled: Boolean(model.thinkingEnabled)
+      });
     }
     return {
       ok: true,
@@ -2065,7 +2141,8 @@ async function runModelConnectionTest(id, card) {
     provider: card.querySelector('[data-field="provider"]')?.value.trim() || current.provider,
     model: card.querySelector('[data-field="model"]')?.value.trim() || current.model,
     baseUrl: card.querySelector('[data-field="baseUrl"]')?.value.trim() || current.baseUrl,
-    apiKey: card.querySelector('[data-field="apiKey"]')?.value.trim() || current.apiKey
+    apiKey: card.querySelector('[data-field="apiKey"]')?.value.trim() || current.apiKey,
+    thinkingEnabled: Boolean(card.querySelector('[data-field="thinkingEnabled"]')?.checked)
   };
 
   modelTestState[id] = { status: "pending", message: t("common.testing") };
@@ -2413,6 +2490,13 @@ function renderMessageStream() {
         kind: item.kind || "",
         loadingBody
       });
+      const thinkingState = item.thinkingEnabled
+        ? hasThinkingContent(item)
+          ? thinkingBlock
+          : `<div class="think-empty-state">${escapeHtml(
+              currentLanguage === "zh-CN" ? "本次未返回思考内容" : "No thinking content returned"
+            )}</div>`
+        : "";
 
       return `
         <div class="message-row assistant">
@@ -2443,11 +2527,33 @@ function renderMessageStream() {
                 ? `<span class="synthesis-badge">${escapeHtml(
                     currentLanguage === "zh-CN" ? "合并" : "Merged"
                   )}</span>`
-                : ""
+              : ""
             }
           </div>
-          ${thinkingBlock}
-          ${contentBody}
+          <div class="ai-card-sections">
+            ${
+              item.thinkingEnabled
+                ? `
+                  <section class="ai-card-section ai-card-section-thinking">
+                    <div class="ai-card-section-label">${escapeHtml(t("common.thinking"))}</div>
+                    ${thinkingState}
+                  </section>
+                `
+                : ""
+            }
+            <section class="ai-card-section ai-card-section-answer">
+              <div class="ai-card-section-label">${escapeHtml(
+                item.kind === "synthesis"
+                  ? currentLanguage === "zh-CN"
+                    ? "整合输出"
+                    : "Synthesis"
+                  : currentLanguage === "zh-CN"
+                  ? "模型输出"
+                  : "Response"
+              )}</div>
+              ${contentBody}
+            </section>
+          </div>
           </article>
         </div>
       `;
@@ -2547,6 +2653,10 @@ function renderConfigGrid() {
             <input class="text-input" data-field="baseUrl" value="${escapeHtml(item.baseUrl)}" />
             <label class="field-label">${escapeHtml(t("common.fieldApiKey"))}</label>
             <input class="text-input" data-field="apiKey" value="${escapeHtml(item.apiKey || "")}" />
+            <label class="field-checkbox-row">
+              <input type="checkbox" data-field="thinkingEnabled" ${item.thinkingEnabled ? "checked" : ""} />
+              <span>${escapeHtml(t("common.fieldThinking"))}</span>
+            </label>
           </div>
           ${backendHint}
           ${testMessage}
@@ -2645,6 +2755,19 @@ function renderFriendGrid() {
       `;
     })
     .join("");
+}
+
+function bootstrapDefaultFriendsIfMissing() {
+  if (runtimeMode !== "frontend") return;
+  if (friendProfiles.length > 0) return;
+  if (shouldBootstrapDefaultFriends(localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.friends)), modelConfigs)) {
+    friendProfiles = createDefaultFriendProfiles(modelConfigs);
+    saveFriendProfiles();
+    defaultGroupSettings = normalizeGroupSettings(createDefaultGroupSettings(friendProfiles), friendProfiles);
+    saveDefaultGroupSettings();
+    currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
+    draftGroupSettings = cloneGroupSettings(defaultGroupSettings);
+  }
 }
 
 function renderAccount() {
@@ -2934,19 +3057,19 @@ async function loadBackendState() {
       apiRequest("/api/conversations")
     ]);
     if (accountData.account) {
-      writeJson(STORAGE_KEYS.account, accountData.account);
+      writeJson(STORAGE_KEYS.account, normalizeLocalAccount(accountData.account));
     }
     if (Array.isArray(modelData.models) && modelData.models.length) {
       modelConfigs = normalizeModelConfigs(modelData.models);
-      writeJson(STORAGE_KEYS.models, modelConfigs);
+      writeScopedJson(STORAGE_KEYS.models, modelConfigs);
     }
     if (Array.isArray(friendData.friends) && friendData.friends.length) {
       friendProfiles = normalizeFriendProfiles(friendData.friends, modelConfigs);
-      writeJson(STORAGE_KEYS.friends, friendProfiles);
+      writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
     }
     if (groupSettingsData.groupSettings) {
       defaultGroupSettings = normalizeGroupSettings(groupSettingsData.groupSettings, friendProfiles);
-      writeJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
+      writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
       currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
       draftGroupSettings = cloneGroupSettings(defaultGroupSettings);
     }
@@ -3030,18 +3153,28 @@ async function saveAccount({ email, name, fromModal = false }) {
     return;
   }
 
+  const previousScopedHistory = getHistoryItems();
   const nextAccount = { email, name };
   if (runtimeMode === "backend") {
     const data = await apiRequest("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(nextAccount)
     });
-    writeJson(STORAGE_KEYS.account, data.account || nextAccount);
+    writeJson(STORAGE_KEYS.account, normalizeLocalAccount(data.account || nextAccount));
   } else {
-    writeJson(STORAGE_KEYS.account, nextAccount);
+    writeJson(STORAGE_KEYS.account, normalizeLocalAccount(nextAccount));
+  }
+
+  if (runtimeMode === "frontend") {
+    reloadScopedLocalState();
+    if (!getHistoryItems().length && previousScopedHistory.length) {
+      saveHistoryItems(previousScopedHistory);
+    }
+    await loadLocalModelConfigFile();
   }
 
   renderAccount();
+  rerenderAll();
   if (modalAccountError) modalAccountError.hidden = true;
   if (loginModal) loginModal.hidden = true;
 }
@@ -3053,6 +3186,10 @@ async function runWorkflow(options = {}) {
     activeHistoryIndex !== null && activeHistoryIndex >= 0 ? history[activeHistoryIndex] : null;
   const replaceCurrent = Boolean(options.replaceCurrent);
   const prompt = promptInput.value.trim() || activeSession?.prompt?.trim() || "";
+  if (!friendProfiles.length) {
+    setRuntimeStatus(t("common.needExistingFriends"));
+    return;
+  }
   const activeFriends = resolveConversationFriends();
   if (!prompt || !activeFriends.length) {
     setRuntimeStatus(t("common.needPrompt"));
@@ -3567,7 +3704,8 @@ function bindSettingsEvents() {
         provider: card.querySelector('[data-field="provider"]')?.value.trim() || current.provider,
         model: card.querySelector('[data-field="model"]')?.value.trim() || current.model,
         baseUrl: card.querySelector('[data-field="baseUrl"]')?.value.trim() || current.baseUrl,
-        apiKey: card.querySelector('[data-field="apiKey"]')?.value.trim() || current.apiKey
+        apiKey: card.querySelector('[data-field="apiKey"]')?.value.trim() || current.apiKey,
+        thinkingEnabled: Boolean(card.querySelector('[data-field="thinkingEnabled"]')?.checked)
       });
     }
 
@@ -3903,6 +4041,7 @@ async function initializeApp() {
   }
 
   await loadLocalModelConfigFile();
+  bootstrapDefaultFriendsIfMissing();
   await loadFrontendPasswordHash();
 
   applyLanguage();

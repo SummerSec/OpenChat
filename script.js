@@ -2628,6 +2628,12 @@ function renderConfigGrid() {
         const testMessage = testState.message
           ? `<p class="config-test-status ${escapeHtml(testState.status || "")}">${escapeHtml(testState.message)}</p>`
           : "";
+        const backendHint =
+          runtimeMode === "frontend" && ["supercodex", "ice"].includes(String(item.provider || "").toLowerCase())
+            ? `<p class="config-backend-hint">${escapeHtml(t("common.backendRecommended"))} - ${escapeHtml(
+                t("common.backendRecommendedCopy")
+              )}</p>`
+            : "";
         const providerOptions = [...new Set([...PROVIDER_OPTIONS, item.provider].filter(Boolean))]
           .map(
             (provider) =>
@@ -2682,6 +2688,7 @@ function renderConfigGrid() {
               <span>${escapeHtml(t("common.fieldThinking"))}</span>
             </label>
           </div>
+          ${backendHint}
           ${testMessage}
           <div class="config-card-actions">
             <button class="ghost-button" data-action="test" type="button">${escapeHtml(

@@ -81,17 +81,19 @@ VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
 
 ### Local deployment
 
-Edit:
+Create or update:
 
 `public/frontend-auth.json`
 
-Example:
+Expected shape:
 
 ```json
 {
-  "frontendPasswordMd5": "5f4dcc3b5aa765d61d8327deb882cf99"
+  "frontendPasswordMd5": "<md5-hash>"
 }
 ```
+
+Do not commit a real password hash that you actively use.
 
 You can generate an MD5 hash with Node:
 

@@ -13,6 +13,7 @@ import {
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
 import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
+import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -904,6 +905,24 @@ function escapeHtml(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function renderSynthesisContent(content = "") {
+  try {
+    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
+  } catch {
+    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+  }
+}
+
+function renderAssistantMessageContent({ content = "", isLoading = false, kind = "", loadingBody = "" } = {}) {
+  if (!content && isLoading) {
+    return loadingBody;
+  }
+
+  return kind === "synthesis"
+    ? renderSynthesisContent(content || "")
+    : `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
 }
 
 function sleep(ms) {
@@ -2465,10 +2484,12 @@ function renderMessageStream() {
             </details>
           `
           : "";
-      const contentBody =
-        item.content || !item.isLoading
-          ? `<div class="ai-card-body">${escapeHtml(item.content || "")}</div>`
-          : loadingBody;
+      const contentBody = renderAssistantMessageContent({
+        content: item.content || "",
+        isLoading: item.isLoading,
+        kind: item.kind || "",
+        loadingBody
+      });
       const thinkingState = item.thinkingEnabled
         ? hasThinkingContent(item)
           ? thinkingBlock

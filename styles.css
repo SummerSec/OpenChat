@@ -1582,6 +1582,161 @@ body.frontend-access-locked #frontend-password-modal {
   overflow-wrap: anywhere;
 }
 
+.synthesis-card {
+  --markdown-heading: var(--text);
+  --markdown-strong: var(--text);
+  --markdown-muted: var(--muted);
+  --markdown-accent: var(--blue);
+  --markdown-accent-strong: var(--blue-deep);
+  --markdown-surface: var(--blue-soft);
+  --markdown-border-strong: rgba(77, 107, 254, 0.32);
+  --markdown-border-soft: rgba(77, 107, 254, 0.16);
+  --markdown-border-subtle: rgba(77, 107, 254, 0.12);
+  --markdown-border-faint: rgba(77, 107, 254, 0.1);
+  --markdown-code-bg: rgba(77, 107, 254, 0.08);
+}
+
+.synthesis-card .markdown-content {
+  white-space: normal;
+}
+
+.synthesis-card .markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.synthesis-card .markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.synthesis-card .markdown-content h1,
+.synthesis-card .markdown-content h2,
+.synthesis-card .markdown-content h3,
+.synthesis-card .markdown-content h4,
+.synthesis-card .markdown-content h5,
+.synthesis-card .markdown-content h6 {
+  margin: 1.4em 0 0.65em;
+  color: var(--markdown-heading);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.synthesis-card .markdown-content h1 {
+  font-size: 1.55rem;
+}
+
+.synthesis-card .markdown-content h2 {
+  font-size: 1.28rem;
+}
+
+.synthesis-card .markdown-content h3 {
+  font-size: 1.08rem;
+}
+
+.synthesis-card .markdown-content p,
+.synthesis-card .markdown-content ul,
+.synthesis-card .markdown-content ol,
+.synthesis-card .markdown-content blockquote,
+.synthesis-card .markdown-content pre,
+.synthesis-card .markdown-content table {
+  margin: 0 0 1em;
+}
+
+.synthesis-card .markdown-content ul,
+.synthesis-card .markdown-content ol {
+  padding-left: 1.35rem;
+}
+
+.synthesis-card .markdown-content li + li {
+  margin-top: 0.4em;
+}
+
+.synthesis-card .markdown-content li::marker {
+  color: var(--markdown-accent);
+}
+
+.synthesis-card .markdown-content a {
+  color: var(--markdown-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.16em;
+}
+
+.synthesis-card .markdown-content a:hover {
+  color: var(--markdown-accent-strong);
+}
+
+.synthesis-card .markdown-content strong {
+  color: var(--markdown-strong);
+}
+
+.synthesis-card .markdown-content blockquote {
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--markdown-border-strong);
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--markdown-surface) 92%, white 8%) 0%, color-mix(in srgb, var(--markdown-surface) 72%, white 28%) 100%);
+  color: var(--markdown-muted);
+}
+
+.synthesis-card .markdown-content hr {
+  margin: 1.4em 0;
+  border: 0;
+  border-top: 1px solid var(--markdown-border-soft);
+}
+
+.synthesis-card .markdown-content code {
+  padding: 0.14rem 0.42rem;
+  border-radius: 8px;
+  background: var(--markdown-code-bg);
+  color: var(--markdown-heading);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.synthesis-card .markdown-content pre {
+  overflow-x: auto;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--markdown-border-subtle);
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--markdown-surface) 78%, white 22%) 0%, color-mix(in srgb, var(--markdown-surface) 92%, white 8%) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.synthesis-card .markdown-content pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: var(--markdown-heading);
+  white-space: pre;
+}
+
+.synthesis-card .markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--markdown-border-subtle);
+}
+
+.synthesis-card .markdown-content th,
+.synthesis-card .markdown-content td {
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid var(--markdown-border-faint);
+}
+
+.synthesis-card .markdown-content th {
+  background: var(--markdown-code-bg);
+  color: var(--markdown-strong);
+  font-weight: 700;
+}
+
+.synthesis-card .markdown-content tr:last-child td {
+  border-bottom: 0;
+}
+
 .ai-card-loading {
   display: grid;
   gap: 10px;

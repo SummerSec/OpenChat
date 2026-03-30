@@ -13,10 +13,21 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <link rel="stylesheet" href="src/theme-switcher.css" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="src/pretext.css" />
     <link rel="stylesheet" href="src/styles.css" />
+    <link rel="stylesheet" href="src/components/message-card.css" />
+    <link rel="stylesheet" href="node_modules/streamdown/styles.css" />
   </head>
   <body>
     <div class="layout app-layout">
@@ -199,9 +210,11 @@
             </div>
           </section>
 
-          <div class="message-stream" id="message-stream"></div>
+          <div class="message-stream" id="message-stream">
+  <div id="chat-root"></div>
+</div>
 
-          <div class="suggestion-row compact">
+          <div class="suggestion-row">
             <button class="suggestion-card" data-suggestion-index="0"></button>
             <button class="suggestion-card" data-suggestion-index="1"></button>
             <button class="suggestion-card" data-suggestion-index="2"></button>
@@ -249,5 +262,19 @@
     </div>
 
     <script type="module" src="src/script.js"></script>
+
+    <!-- Confirm Dialog -->
+    <div id="confirm-dialog" class="confirm-modal" hidden>
+      <div class="confirm-modal-backdrop"></div>
+      <div class="confirm-modal-box">
+        <div class="confirm-modal-icon">?</div>
+        <h2 id="confirm-dialog-title">Confirm</h2>
+        <p id="confirm-dialog-message">Are you sure?</p>
+        <div class="confirm-modal-actions">
+          <button class="ghost-button" id="confirm-dialog-cancel" type="button">Cancel</button>
+          <button class="primary-button" id="confirm-dialog-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

@@ -14,6 +14,14 @@ import { buildScopedStorageKey, normalizeLocalAccount } from "./utils/account-sc
 import { shouldBootstrapDefaultFriends } from "./utils/friend-bootstrap-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./utils/thinking-config-utils.mjs";
 import { renderSafeMarkdown } from "./utils/markdown-render-utils.mjs";
+import {
+  MessageCard,
+  renderMessages,
+  appendMessage,
+  updateMessage,
+  Components
+} from "./components/message-card.js";
+import { updateMessageStream } from "./utils/streaming-typewriter.js";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -248,7 +256,7 @@ const I18N = {
       platformFeatureCardLabel: "\u5e73\u53f0\u80fd\u529b",
       applyCurrentConversation: "\u4ec5\u5e94\u7528\u5230\u5f53\u524d\u4f1a\u8bdd",
       saveDefaultGroup: "\u4fdd\u5b58\u4e3a\u9ed8\u8ba4\u7fa4\u8bbe\u7f6e",
-      run: "\u8fd0\u884c",
+      run: "\u53d1\u9001",
       ready: "\u5c31\u7eea",
       finalSynthesis: "\u6700\u7ec8\u6574\u5408",
       rebuild: "\u91cd\u65b0\u751f\u6210",
@@ -346,6 +354,7 @@ const I18N = {
       disabled: "\u5df2\u505c\u7528",
       saveConfig: "\u4fdd\u5b58\u914d\u7f6e",
       testConfig: "\u6d4b\u8bd5\u8fde\u63a5",
+      copy: "\u590d\u5236",
       testAllModels: "\u6d4b\u8bd5\u5168\u90e8\u5df2\u542f\u7528\u6a21\u578b",
       testing: "\u6d4b\u8bd5\u4e2d...",
       testSuccess: "\u8fde\u63a5\u6210\u529f",
@@ -356,12 +365,17 @@ const I18N = {
       enable: "\u542f\u7528",
       delete: "\u5220\u9664",
       confirmDelete: "\u786e\u5b9a\u8981\u5220\u9664\u8fd9\u4e2a\u6a21\u578b\u5417\uff1f",
+      confirmTitle: "\u786e\u8ba4\u5220\u9664",
+      confirm: "\u786e\u8ba4",
+      cancel: "\u53d6\u6d88",
       customModel: "\u81ea\u5b9a\u4e49\u6a21\u578b",
       roleModel: "AI \u52a9\u624b",
       roleFriend: "AI \u7fa4\u53cb",
       roleSynthesis: "\u6574\u5408\u7ed3\u679c",
       roleMember: "\u7fa4\u6210\u5458",
       thinking: "\u601d\u8003\u8fc7\u7a0b",
+      showThinking: "\u67e5\u770b",
+      hideThinking: "\u9690\u85cf",
       generating: "\u751f\u6210\u4e2d",
       reasoningUnavailable: "\u8be5\u6a21\u578b\u672a\u516c\u5f00\u4e2d\u95f4\u601d\u8def",
       untitledConversation: "\u672a\u547d\u540d\u5bf9\u8bdd",
@@ -458,7 +472,7 @@ const I18N = {
       platformFeatureCardLabel: "Platform capability",
       applyCurrentConversation: "Apply to current conversation",
       saveDefaultGroup: "Save as default group",
-      run: "Run",
+      run: "Send",
       ready: "Ready",
       finalSynthesis: "Final synthesis",
       rebuild: "Rebuild",
@@ -551,6 +565,7 @@ const I18N = {
       disabled: "Disabled",
       saveConfig: "Save config",
       testConfig: "Test connection",
+      copy: "Copy",
       testAllModels: "Test all enabled models",
       testing: "Testing...",
       testSuccess: "Connection successful",
@@ -561,12 +576,17 @@ const I18N = {
       enable: "Enable",
       delete: "Delete",
       confirmDelete: "Are you sure you want to delete this model?",
+      confirmTitle: "Confirm Delete",
+      confirm: "Confirm",
+      cancel: "Cancel",
       customModel: "Custom model",
       roleModel: "AI assistant",
       roleFriend: "AI friend",
       roleSynthesis: "Synthesis",
       roleMember: "Member",
       thinking: "Thinking",
+      showThinking: "View",
+      hideThinking: "Hide",
       generating: "Generating",
       reasoningUnavailable: "No public reasoning trace",
       untitledConversation: "Untitled conversation",
@@ -631,6 +651,67 @@ const I18N = {
     }
   }
 };
+
+// Confirm dialog state
+let confirmDialogResolve = null;
+
+function initConfirmDialog() {
+  const dialog = document.getElementById("confirm-dialog");
+  const cancelBtn = document.getElementById("confirm-dialog-cancel");
+  const confirmBtn = document.getElementById("confirm-dialog-confirm");
+
+  if (!dialog || !cancelBtn || !confirmBtn) return;
+
+  cancelBtn.addEventListener("click", () => {
+    if (confirmDialogResolve) {
+      confirmDialogResolve(false);
+      confirmDialogResolve = null;
+    }
+    dialog.hidden = true;
+  });
+
+  confirmBtn.addEventListener("click", () => {
+    if (confirmDialogResolve) {
+      confirmDialogResolve(true);
+      confirmDialogResolve = null;
+    }
+    dialog.hidden = true;
+  });
+
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog || e.target.classList.contains("confirm-modal-backdrop")) {
+      if (confirmDialogResolve) {
+        confirmDialogResolve(false);
+        confirmDialogResolve = null;
+      }
+      dialog.hidden = true;
+    }
+  });
+}
+
+function showConfirm(message, title) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById("confirm-dialog");
+    const titleEl = document.getElementById("confirm-dialog-title");
+    const messageEl = document.getElementById("confirm-dialog-message");
+    const confirmBtn = document.getElementById("confirm-dialog-confirm");
+    const cancelBtn = document.getElementById("confirm-dialog-cancel");
+
+    if (!dialog) {
+      resolve(window.confirm(message));
+      return;
+    }
+
+    confirmDialogResolve = resolve;
+
+    if (titleEl) titleEl.textContent = title || t("common.confirmTitle") || "Confirm";
+    if (messageEl) messageEl.textContent = message;
+    if (confirmBtn) confirmBtn.textContent = t("common.confirm") || "Confirm";
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel") || "Cancel";
+
+    dialog.hidden = false;
+  });
+}
 
 const promptInput = document.getElementById("prompt-input");
 const synthModelSelect = document.getElementById("synth-model");
@@ -756,6 +837,7 @@ let currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
 let draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
 let currentConversation = [];
 let activeConversationId = null;
+let renderedMessageElements = new Map(); // Track rendered message elements for incremental updates
 let activeHistoryIndex = null;
 let editingHistoryIndex = null;
 let expandedHistoryIndex = null;
@@ -995,9 +1077,9 @@ function escapeHtml(value = "") {
 
 function renderSynthesisContent(content = "") {
   try {
-    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
+    return `<div class="ai-card-body pretext markdown-content">${renderSafeMarkdown(content || "")}</div>`;
   } catch {
-    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+    return `<div class="ai-card-body pretext">${escapeHtml(content || "")}</div>`;
   }
 }
 
@@ -1008,7 +1090,7 @@ function renderAssistantMessageContent({ content = "", isLoading = false, kind =
 
   return kind === "synthesis"
     ? renderSynthesisContent(content || "")
-    : `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+    : `<div class="ai-card-body pretext">${escapeHtml(content || "")}</div>`;
 }
 
 function sleep(ms) {
@@ -1400,19 +1482,34 @@ function normalizeText(text = "") {
 function normalizeModelResult(result = {}) {
   const rawContent = String(result.content || "");
   const rawThinking = String(result.thinking || "");
+
+  // Pattern 1: <think> tags
   const thinkTagMatch = rawContent.match(/<think>([\s\S]*?)<\/think>/i);
+
+  // Pattern 2: ```thinking code block
+  const thinkBlockMatch = rawContent.match(/```thinking\n([\s\S]*?)```/);
+
   if (rawThinking) {
     return {
       thinking: normalizeText(rawThinking),
       content: normalizeText(rawContent.replace(/<think>[\s\S]*?<\/think>/gi, ""))
     };
   }
+
   if (thinkTagMatch) {
     return {
       thinking: normalizeText(thinkTagMatch[1] || ""),
       content: normalizeText(rawContent.replace(/<think>[\s\S]*?<\/think>/gi, ""))
     };
   }
+
+  if (thinkBlockMatch) {
+    return {
+      thinking: normalizeText(thinkBlockMatch[1] || ""),
+      content: normalizeText(rawContent.replace(/```thinking\n[\s\S]*?```/, ""))
+    };
+  }
+
   return {
     thinking: "",
     content: normalizeText(rawContent)
@@ -1518,6 +1615,8 @@ function getProviderIconKey(name = "", provider = "") {
 
 function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = "") {
   const avatarValue = String(avatar || "").trim();
+  const fallbackLabel = escapeHtml(String(fallback || name || provider || "AI").slice(0, 2).toUpperCase());
+
   if (avatarValue) {
     if (/^(https?:\/\/|\/|data:image\/)/i.test(avatarValue)) {
       return `
@@ -1526,7 +1625,7 @@ function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = 
           src="${escapeHtml(avatarValue)}"
           alt="${escapeHtml(name || provider || fallback)}"
           loading="lazy"
-          onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-fallback avatar-fallback-custom', textContent: '${escapeHtml(String(fallback || "AI").slice(0, 2).toUpperCase())}' }))"
+          onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-fallback avatar-fallback-custom', textContent: '${fallbackLabel}' }))"
         />
       `;
     }
@@ -1534,20 +1633,8 @@ function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = 
       Array.from(avatarValue).slice(0, 2).join("")
     )}</span>`;
   }
-  if (!name && !provider) {
-    return `<span class="avatar-fallback">${escapeHtml(fallback)}</span>`;
-  }
-  const iconKey = getProviderIconKey(name, provider);
-  const fallbackLabel = escapeHtml(String(fallback || "AI").slice(0, 2).toUpperCase());
-  return `
-    <img
-      class="provider-icon"
-      src="provider-icons/${iconKey}.svg"
-      alt="${escapeHtml(name || provider)}"
-      loading="lazy"
-      onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-fallback', textContent: '${fallbackLabel}' }))"
-    />
-  `;
+
+  return `<span class="avatar-fallback">${fallbackLabel}</span>`;
 }
 
 function apiRequest(path, options = {}) {
@@ -1748,20 +1835,28 @@ function removeMessagesByRunId(runId) {
 
 async function streamTextToMessage(messageId, text, field = "content") {
   const value = String(text || "");
-  const chunks = value.match(/[\s\S]{1,24}/g) || [];
+  const chunks = value.match(/[\s\S]{1,12}/g) || []; // Smaller chunks for smoother streaming
   if (!chunks.length) {
     updateConversationMessageById(messageId, { [field]: value, isLoading: false });
     renderMessageStream();
     return;
   }
+
+  // Start streaming
+  updateConversationMessageById(messageId, { [field]: "", isLoading: true });
+  renderMessageStream();
+
   let buffer = "";
   for (const chunk of chunks) {
     buffer += chunk;
-    updateConversationMessageById(messageId, { [field]: buffer });
+    updateConversationMessageById(messageId, { [field]: buffer, isLoading: true });
     renderMessageStream();
-    await sleep(18);
+    await sleep(12); // Slightly faster for smoother effect
   }
+
+  // Streaming complete
   updateConversationMessageById(messageId, { isLoading: false });
+  renderMessageStream();
 }
 
 function mockResponseFor(model, prompt, platformContext = null) {
@@ -1889,6 +1984,105 @@ function buildPlatformSourceLabel(platformContext, baseSource) {
   return `${baseSource} · ${platformContext.name}`;
 }
 
+/**
+ * Call OpenAI compatible API with streaming support
+ * @param {Object} model - Model config
+ * @param {string} prompt - User prompt
+ * @param {string} systemPrompt - System prompt
+ * @param {Object} options - Options including onDelta callback
+ * @returns {Promise<{content: string, thinking: string}>}
+ */
+async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = "", options = {}) {
+  console.debug("[Stream] Starting OpenAI compatible stream call", {
+    model: model.model,
+    baseUrl: model.baseUrl,
+    hasApiKey: !!model.apiKey && model.apiKey.length > 0
+  });
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${model.apiKey}`
+    },
+    body: JSON.stringify({
+      model: model.model,
+      messages,
+      stream: true,
+      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
+    })
+  });
+
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    const error = new Error(`HTTP ${response.status}: ${responseText.slice(0, 200) || 'No response body'}`);
+    error.status = response.status;
+    error.responseText = responseText;
+    error.contentType = response.headers.get("content-type") || "";
+    console.error("[Stream] Fetch failed", { status: error.status, text: error.responseText });
+    throw error;
+  }
+
+  if (!response.body) {
+    console.error("[Stream] Response.body is null, streaming not supported. Response headers:", Object.fromEntries(response.headers.entries()));
+    throw new Error("Streaming is not supported by this API endpoint");
+  }
+
+  console.debug("[Stream] Stream connection established");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+  let fullThinking = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+      const data = trimmed.slice(6); // Remove "data: " prefix
+      if (data === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(data);
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        // Handle content
+        if (delta.content) {
+          fullContent += delta.content;
+          console.debug("[Stream] Content delta", { length: delta.content.length, total: fullContent.length });
+          options.onDelta?.({ type: "content", text: delta.content });
+        }
+
+        // Handle reasoning/thinking
+        if (delta.reasoning_content) {
+          fullThinking += delta.reasoning_content;
+          console.debug("[Stream] Thinking delta", { length: delta.reasoning_content.length, total: fullThinking.length });
+          options.onDelta?.({ type: "thinking", text: delta.reasoning_content });
+        }
+      } catch {
+        // Skip invalid JSON
+      }
+    }
+  }
+
+  return { content: fullContent.trim(), thinking: fullThinking.trim() };
+}
+
 async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "", options = {}) {
   const messages = [];
   if (systemPrompt) {
@@ -2013,7 +2207,8 @@ async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}
   };
 }
 
-async function generateFrontendFriendResponse(friend, prompt, platformContext) {
+async function generateFrontendFriendResponse(friend, prompt, platformContext, targetId) {
+  console.debug("[Frontend Response] Generating response for friend:", friend.name, friend.id, "hasLiveProviderConfig:", hasLiveProviderConfig(friend));
   const systemPrompt = `${
     currentConversationGroupSettings.sharedSystemPromptEnabled
       ? currentConversationGroupSettings.sharedSystemPrompt
@@ -2024,6 +2219,13 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
     const { thinking, content } = normalizeModelResult({
       content: mockResponseFor(friend, prompt, platformContext)
     });
+    // Stream mock response for visual effect
+    if (thinking && targetId) {
+      await streamTextToMessage(targetId, thinking, "thinking");
+    }
+    if (content && targetId) {
+      await streamTextToMessage(targetId, content, "content");
+    }
     return {
       friendId: friend.id,
       name: friend.name,
@@ -2033,8 +2235,8 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
       provider: friend.provider,
       model: friend.model,
       source: buildPlatformSourceLabel(platformContext, t("common.mock")),
-      thinking,
-      content,
+      thinking: thinking || "",
+      content: content || "",
       error: ""
     };
   }
@@ -2042,6 +2244,66 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
   try {
     let output;
     const providerKind = detectProviderKind(friend);
+
+    // Use streaming for OpenAI compatible providers
+    if (providerKind !== "anthropic" && providerKind !== "gemini" && targetId) {
+      console.debug("[Frontend Response] Using streaming for provider:", providerKind);
+      let currentContent = "";
+      let currentThinking = "";
+
+      // Mark message as streaming
+      updateConversationMessageById(targetId, { isLoading: true });
+
+      output = await callOpenAICompatibleFrontendStream(friend, prompt, systemPrompt, {
+        thinkingEnabled: Boolean(friend.thinkingEnabled),
+        onDelta: async (delta) => {
+          if (delta.type === "thinking") {
+            currentThinking += delta.text;
+            updateConversationMessageById(targetId, {
+              thinking: currentThinking,
+              isLoading: true
+            });
+            // 流式更新 - 增量动画更新
+            try {
+              await updateMessageStream(targetId, currentThinking, false, true);
+            } catch (err) {
+              console.warn("[StreamRenderer] Failed to update thinking stream:", err);
+            }
+          } else if (delta.type === "content") {
+            currentContent += delta.text;
+            updateConversationMessageById(targetId, {
+              content: currentContent,
+              isLoading: true
+            });
+            // 流式更新 - 增量动画更新
+            try {
+              await updateMessageStream(targetId, currentContent, false, true);
+            } catch (err) {
+              console.warn("[StreamRenderer] Failed to update content stream:", err);
+            }
+          }
+        }
+      });
+
+      // Mark streaming complete - 只更新状态，不再调用 renderMessageStream
+      updateConversationMessageById(targetId, { isLoading: false });
+
+      return {
+        friendId: friend.id,
+        name: friend.name,
+        avatar: friend.avatar || friend.modelAvatar || "",
+        modelConfigId: friend.modelConfigId,
+        modelConfigName: friend.modelConfigName,
+        provider: friend.provider,
+        model: friend.model,
+        source: buildPlatformSourceLabel(platformContext, t("common.configured")),
+        thinking: output.thinking || "",
+        content: output.content || "",
+        error: ""
+      };
+    }
+
+    // Non-streaming for Anthropic and Gemini (fallback)
     if (providerKind === "anthropic") {
       output = await callAnthropicFrontend(friend, prompt, systemPrompt, {
         thinkingEnabled: Boolean(friend.thinkingEnabled)
@@ -2055,6 +2317,15 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
         thinkingEnabled: Boolean(friend.thinkingEnabled)
       });
     }
+
+    // Simulate streaming for non-streaming providers
+    if (output.thinking && targetId) {
+      await streamTextToMessage(targetId, output.thinking, "thinking");
+    }
+    if (output.content && targetId) {
+      await streamTextToMessage(targetId, output.content, "content");
+    }
+
     return {
       friendId: friend.id,
       name: friend.name,
@@ -2064,8 +2335,8 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
       provider: friend.provider,
       model: friend.model,
       source: buildPlatformSourceLabel(platformContext, t("common.configured")),
-      thinking: friend.thinkingEnabled ? output.thinking || "" : "",
-      content: output.content || mockResponseFor(friend, prompt, platformContext),
+      thinking: output.thinking || "",
+      content: output.content || "",
       error: ""
     };
   } catch (error) {
@@ -2078,6 +2349,15 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
     const { thinking, content } = normalizeModelResult({
       content: mockResponseFor(friend, prompt, platformContext)
     });
+
+    // Stream fallback content for visual consistency
+    if (thinking && targetId) {
+      await streamTextToMessage(targetId, thinking, "thinking");
+    }
+    if (content && targetId) {
+      await streamTextToMessage(targetId, content, "content");
+    }
+
     return {
       friendId: friend.id,
       name: friend.name,
@@ -2087,14 +2367,14 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext) {
       provider: friend.provider,
       model: friend.model,
       source: buildPlatformSourceLabel(platformContext, t("common.fallback")),
-      thinking,
-      content,
+      thinking: thinking || "",
+      content: content || "",
       error: classifiedError
     };
   }
 }
 
-async function generateFrontendSynthesisResponse(synthesisFriend, prompt, results, platformContext) {
+async function generateFrontendSynthesisResponse(synthesisFriend, prompt, results, platformContext, targetId) {
   const synthesisPayload = buildSynthesisPayload({
     prompt,
     language: currentLanguage,
@@ -2110,8 +2390,12 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
     : `You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.${buildPlatformPromptAddon(platformContext)}`;
 
   if (!hasLiveProviderConfig(synthesisFriend)) {
+    const fallbackContent = buildFallbackSynthesis({ prompt, language: currentLanguage, results });
+    if (targetId) {
+      await streamTextToMessage(targetId, fallbackContent, "content");
+    }
     return {
-      content: buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
+      content: fallbackContent,
       source: t("common.fallback"),
       error: ""
     };
@@ -2120,6 +2404,34 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
   try {
     let output;
     const providerKind = detectProviderKind(synthesisFriend);
+
+    // Use streaming for OpenAI compatible providers
+    if (providerKind !== "anthropic" && providerKind !== "gemini" && targetId) {
+      let currentContent = "";
+
+      output = await callOpenAICompatibleFrontendStream(synthesisFriend, synthesisPrompt, systemPrompt, {
+        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled),
+        onDelta: (delta) => {
+          if (delta.type === "content") {
+            currentContent += delta.text;
+            updateConversationMessageById(targetId, {
+              content: currentContent,
+              isLoading: false
+            });
+            renderMessageStream();
+          }
+        }
+      });
+
+      return {
+        content: output.content || "",
+        source: t("common.configured"),
+        error: "",
+        payload: synthesisPayload
+      };
+    }
+
+    // Non-streaming for Anthropic and Gemini
     if (providerKind === "anthropic") {
       output = await callAnthropicFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
         thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
@@ -2133,6 +2445,12 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
         thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
       });
     }
+
+    // Simulate streaming for non-streaming providers
+    if (output.content && targetId) {
+      await streamTextToMessage(targetId, output.content, "content");
+    }
+
     return {
       content: output.content || buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
       source: t("common.configured"),
@@ -2140,8 +2458,12 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
       payload: synthesisPayload
     };
   } catch (error) {
+    const fallbackContent = buildFallbackSynthesis({ prompt, language: currentLanguage, results });
+    if (targetId) {
+      await streamTextToMessage(targetId, fallbackContent, "content");
+    }
     return {
-      content: buildFallbackSynthesis({ prompt, language: currentLanguage, results }),
+      content: fallbackContent,
       source: t("common.fallback"),
       error: describeModelTestFailure({ message: error.message, language: currentLanguage, mode: runtimeMode }).message,
       payload: synthesisPayload
@@ -2499,6 +2821,18 @@ function renderMessageStream() {
   if (!messageStream) return;
   const userName = currentLanguage === "zh-CN" ? "\u6211" : "You";
 
+  // Toggle workspace stage copy visibility based on conversation state
+  const workspaceStage = document.querySelector(".workspace-stage-copy");
+  if (workspaceStage) {
+    workspaceStage.classList.toggle("is-hidden", currentConversation.length > 0);
+  }
+
+  // Toggle suggestion row visibility based on conversation state
+  const suggestionRow = document.querySelector(".suggestion-row");
+  if (suggestionRow) {
+    suggestionRow.classList.toggle("is-hidden", currentConversation.length > 0);
+  }
+
   if (!currentConversation.length) {
     messageStream.innerHTML = `
       <div class="stream-empty-state">
@@ -2511,131 +2845,83 @@ function renderMessageStream() {
         <p class="stream-empty-copy">${escapeHtml(t("home.heroCopy"))}</p>
       </div>
     `;
+    renderedMessageElements.clear();
     scrollMessageStreamToBottom();
     return;
   }
 
-  messageStream.innerHTML = currentConversation
-    .map((item) => {
-      if (item.kind === "user") {
-        return `
-          <article class="message-row user">
-            <div class="message-stack">
-              <div class="message-head message-head-user">
-                <span class="message-name">${escapeHtml(userName)}</span>
-                <span class="message-role">${escapeHtml(t("common.roleMember"))}</span>
-                <time class="message-time">${escapeHtml(formatMessageTime(item.createdAt))}</time>
-              </div>
-              <div class="message-bubble">${escapeHtml(item.content)}</div>
-            </div>
-            <div class="message-avatar message-avatar-user"><span class="avatar-fallback">${escapeHtml(
-              userName
-            )}</span></div>
-          </article>
-        `;
+  // Track which messages are currently in the conversation
+  const currentMessageIds = new Set(currentConversation.map((item) => item.messageId));
+
+  // Remove elements for messages that no longer exist
+  for (const [messageId, element] of renderedMessageElements.entries()) {
+    if (!currentMessageIds.has(messageId)) {
+      element.remove();
+      renderedMessageElements.delete(messageId);
+    }
+  }
+
+  // Process each message in current conversation
+  currentConversation.forEach((item, index) => {
+    const existingElement = renderedMessageElements.get(item.messageId);
+
+    if (!existingElement) {
+      // Create new message card
+      const card = MessageCard(item, {
+        userName: currentLanguage === "zh-CN" ? "我" : "You",
+        synthesisLabel: currentLanguage === "zh-CN" ? "整合" : "Merged",
+        currentLanguage,
+        onCopy: () => copyMessageToClipboard(item)
+      });
+
+      // Insert at correct position (maintain order)
+      const nextElement = messageStream.children[index];
+      if (nextElement) {
+        messageStream.insertBefore(card, nextElement);
+      } else {
+        messageStream.appendChild(card);
       }
 
-      const meta = formatMetaParts([item.modelConfigName || item.provider, item.model]);
-      const detailMeta = [meta, item.source, item.error ? `${currentLanguage === "zh-CN" ? "异常" : "Error"}: ${item.error}` : ""]
-        .filter(Boolean)
-        .join(" 路 ");
-      const roleLabel =
-        item.kind === "synthesis"
-          ? t("common.roleSynthesis")
-          : item.isLoading
-          ? t("common.generating")
-          : t("common.roleFriend");
-      const loadingBody = `
-        <div class="ai-card-loading" aria-hidden="true">
-          <span class="skeleton-line w-72"></span>
-          <span class="skeleton-line w-100"></span>
-          <span class="skeleton-line w-84"></span>
-        </div>
-      `;
-      const thinkingBlock =
-        item.thinking && !item.isLoading
-          ? `
-            <details class="think-block">
-              <summary class="think-summary">${escapeHtml(t("common.thinking"))}</summary>
-              <div class="think-content">${escapeHtml(item.thinking)}</div>
-            </details>
-          `
-          : "";
-      const contentBody = renderAssistantMessageContent({
-        content: item.content || "",
-        isLoading: item.isLoading,
-        kind: item.kind || "",
-        loadingBody
-      });
-      const thinkingState = item.thinkingEnabled
-        ? hasThinkingContent(item)
-          ? thinkingBlock
-          : `<div class="think-empty-state">${escapeHtml(
-              currentLanguage === "zh-CN" ? "本次未返回思考内容" : "No thinking content returned"
-            )}</div>`
-        : "";
+      renderedMessageElements.set(item.messageId, card);
 
-      return `
-        <div class="message-row assistant">
-          <article class="ai-card ${item.kind === "synthesis" ? "synthesis-card" : ""} ${
-        item.isLoading ? "is-loading" : ""
-      }">
-          <div class="ai-card-header">
-            <div class="message-avatar ${avatarClass(item.name)}">
-              ${renderProviderIcon(
-                item.name,
-                item.provider,
-                item.name?.slice(0, 2).toUpperCase() || "AI",
-                item.avatar
-              )}
-            </div>
-            <div class="ai-card-headings">
-              <div class="ai-card-title-row">
-                <span class="ai-card-name">${escapeHtml(item.name)}</span>
-                <span class="ai-card-role ${item.isLoading ? "ai-card-role--loading" : ""}">${escapeHtml(
-        roleLabel
-      )}</span>
-                <time class="message-time">${escapeHtml(formatMessageTime(item.createdAt))}</time>
-              </div>
-              <div class="ai-card-meta">${escapeHtml(detailMeta)}</div>
-            </div>
-            ${
-              item.kind === "synthesis"
-                ? `<span class="synthesis-badge">${escapeHtml(
-                    currentLanguage === "zh-CN" ? "合并" : "Merged"
-                  )}</span>`
-              : ""
-            }
-          </div>
-          <div class="ai-card-sections">
-            ${
-              item.thinkingEnabled
-                ? `
-                  <section class="ai-card-section ai-card-section-thinking">
-                    <div class="ai-card-section-label">${escapeHtml(t("common.thinking"))}</div>
-                    ${thinkingState}
-                  </section>
-                `
-                : ""
-            }
-            <section class="ai-card-section ai-card-section-answer">
-              <div class="ai-card-section-label">${escapeHtml(
-                item.kind === "synthesis"
-                  ? currentLanguage === "zh-CN"
-                    ? "整合输出"
-                    : "Synthesis"
-                  : currentLanguage === "zh-CN"
-                  ? "模型输出"
-                  : "Response"
-              )}</div>
-              ${contentBody}
-            </section>
-          </div>
-          </article>
-        </div>
-      `;
-    })
-    .join("");
+      // For new messages with content, apply typewriter effect (仅初始渲染)
+      if (item.content && !item.isLoading) {
+        updateMessageStream(item.messageId, item.content, true).catch((err) => {
+          console.warn("[RenderMessageStream] Failed to apply typewriter effect:", err);
+        });
+      }
+    } else {
+      // 流式消息由 typewriter 直接操作 DOM，不在这里重复渲染
+      // 只更新非流式消息的头部状态（如加载完成标记）
+      if (!item.isLoading && item.content) {
+        const contentNode = existingElement.querySelector(".streamdown-target");
+        const currentContent = contentNode?.dataset.content || "";
+        if (currentContent !== item.content) {
+          updateMessageStream(item.messageId, item.content, false).catch((err) => {
+            console.warn("[RenderMessageStream] Failed to update existing message:", err);
+          });
+        }
+      }
+
+      // Update thinking section if present
+      const thinkingNode = existingElement.querySelector(".think-content");
+      if (thinkingNode && item.thinking) {
+        thinkingNode.textContent = item.thinking;
+      }
+
+      // Update loading state in header
+      const roleBadge = existingElement.querySelector(".message-role");
+      if (roleBadge) {
+        const isGenerating = item.isLoading;
+        const currentText = roleBadge.textContent;
+        const targetText = isGenerating ? "生成中" : "AI 群友";
+        if (currentText !== targetText) {
+          roleBadge.textContent = targetText;
+          roleBadge.classList.toggle("message-role--loading", isGenerating);
+        }
+      }
+    }
+  });
 
   scrollMessageStreamToBottom();
 }
@@ -2733,6 +3019,9 @@ function renderConfigGrid() {
           <div class="config-card-actions">
             <button class="ghost-button" data-action="test" type="button">${escapeHtml(
               testState.status === "pending" ? t("common.testing") : t("common.testConfig")
+            )}</button>
+            <button class="ghost-button" data-action="copy" type="button">${escapeHtml(
+              t("common.copy")
             )}</button>
             <button class="ghost-button" data-action="toggle" type="button">${escapeHtml(
               item.enabled ? t("common.disable") : t("common.enable")
@@ -2978,6 +3267,59 @@ async function shareConversation(index) {
   }
   expandedHistoryIndex = null;
   renderConversationList();
+}
+
+/**
+ * Copy a single message to clipboard
+ * @param {Object} message - Message object with content
+ */
+/**
+ * Copy text to clipboard using fallback method
+ * @param {string} text - Text to copy
+ * @returns {boolean} - Success status
+ */
+function copyTextFallback(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  let success = false;
+  try {
+    success = document.execCommand("copy");
+  } catch {
+    success = false;
+  }
+  document.body.removeChild(textarea);
+  return success;
+}
+
+async function copyMessageToClipboard(message) {
+  const textToCopy = String(message.content || "");
+  if (!textToCopy.trim()) return;
+
+  let success = false;
+
+  try {
+    // Try modern Clipboard API first
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(textToCopy);
+      success = true;
+    } else {
+      // Fallback for non-secure contexts
+      success = copyTextFallback(textToCopy);
+    }
+
+    if (success) {
+      setRuntimeStatus(currentLanguage === "zh-CN" ? "已复制到剪贴板" : "Copied to clipboard");
+    } else {
+      setRuntimeStatus(currentLanguage === "zh-CN" ? "复制失败" : "Copy failed");
+    }
+  } catch (err) {
+    console.error("Failed to copy:", err);
+    setRuntimeStatus(currentLanguage === "zh-CN" ? "复制失败" : "Copy failed");
+  }
 }
 
 async function deleteConversation(index) {
@@ -3277,6 +3619,13 @@ async function runWorkflow(options = {}) {
   isRunning = true;
   setRuntimeStatus(t("common.running", { count: activeFriends.length }));
 
+  // Auto-hide group settings panel when user starts chatting
+  if (isGroupSettingsOpen) {
+    isGroupSettingsOpen = false;
+    isGroupMemberDetailsOpen = false;
+    renderGroupSettingsPanel();
+  }
+
   const runId = createConversationId();
   const createdAt = new Date().toISOString();
   const synthesisFriend =
@@ -3433,33 +3782,40 @@ async function runWorkflow(options = {}) {
         }
       );
     } else {
-      results = await Promise.all(
-        activeFriends.map((friend) => generateFrontendFriendResponse(friend, prompt, platformContext))
+      // Build friendId to messageId mapping
+      const friendIdToMessageId = new Map(
+        friendPlaceholders.map((item) => [item.friendId, item.messageId])
       );
 
+      // Fetch all friend responses concurrently with streaming
+      results = await Promise.all(
+        activeFriends.map((friend) => {
+          const targetId = friendIdToMessageId.get(friend.id);
+          return generateFrontendFriendResponse(friend, prompt, platformContext, targetId);
+        })
+      );
+
+      // Final update for all messages (ensure source/error state is set)
       for (let index = 0; index < results.length; index += 1) {
         const result = results[index];
         const targetId = friendPlaceholders[index].messageId;
-        if (result.thinking) {
-          await streamTextToMessage(targetId, result.thinking, "thinking");
-        }
-        await streamTextToMessage(targetId, result.content, "content");
         updateConversationMessageById(targetId, {
           source: result.source,
           error: result.error || "",
           isLoading: false
         });
-        renderMessageStream();
       }
+      renderMessageStream();
 
       const synthesisResult = await generateFrontendSynthesisResponse(
         synthesisFriend,
         prompt,
         results,
-        platformContext
+        platformContext,
+        synthesisPlaceholder.messageId
       );
       mergedAnswer = synthesisResult.content;
-      await streamTextToMessage(synthesisPlaceholder.messageId, mergedAnswer, "content");
+      // Final update for synthesis (source/error state)
       updateConversationMessageById(synthesisPlaceholder.messageId, {
         source: synthesisResult.source,
         error: synthesisResult.error || "",
@@ -3509,10 +3865,21 @@ function bindLanguageControls() {
     applyLanguage();
     rerenderAll();
   });
-
-  }
+}
 
 function bindWorkspaceEvents() {
+  // Think block toggle button text update
+  messageStream?.addEventListener("toggle", (event) => {
+    const thinkBlock = event.target.closest(".think-block");
+    if (!thinkBlock) return;
+    const btn = thinkBlock.querySelector(".think-toggle-btn");
+    if (!btn) return;
+    const isOpen = thinkBlock.hasAttribute("open");
+    btn.textContent = isOpen
+      ? (t("common.hideThinking") || "Hide")
+      : (t("common.showThinking") || "View");
+  });
+
   document.querySelectorAll(".suggestion-card").forEach((button, index) => {
     button.addEventListener("click", () => {
       if (!promptInput) return;
@@ -3811,12 +4178,32 @@ function bindSettingsEvents() {
       return;
     }
 
+    if (button.dataset.action === "copy") {
+      const current = modelConfigs.find((item) => item.id === id);
+      if (!current) return;
+      const newConfig = {
+        ...current,
+        id: generateId(),
+        name: current.name + " (Copy)",
+        enabled: true
+      };
+      modelConfigs.push(newConfig);
+      saveModelConfigs();
+      await syncModelConfigsToBackend();
+      rerenderAll();
+      return;
+    }
+
     if (button.dataset.action === "toggle") {
       updateModelConfigById(id, {
         enabled: !modelConfigs.find((item) => item.id === id)?.enabled
       });
     } else if (button.dataset.action === "delete") {
-      if (confirm(t("common.confirmDelete") || "Are you sure you want to delete this model?")) {
+      const confirmed = await showConfirm(
+        t("common.confirmDelete") || "Are you sure you want to delete this model?",
+        t("common.confirmTitle") || "Confirm Delete"
+      );
+      if (confirmed) {
         modelConfigs = modelConfigs.filter((item) => item.id !== id);
         saveModelConfigs();
         await syncModelConfigsToBackend();
@@ -4163,15 +4550,17 @@ function bindUserMenu() {
 }
 
 async function initializeApp() {
+  // Load initial data in parallel for faster startup
+  const loadPromises = [loadLocalModelConfigFile(), loadFrontendPasswordHash()];
   if (runtimeMode === "backend") {
-    await loadBackendState();
+    loadPromises.push(loadBackendState());
   }
+  await Promise.all(loadPromises);
 
-  await loadLocalModelConfigFile();
   bootstrapDefaultFriendsIfMissing();
-  await loadFrontendPasswordHash();
 
   initTheme();
+  initConfirmDialog();
   applyLanguage();
   renderAccount();
   renderRuntime();
@@ -4221,4 +4610,13 @@ async function initializeApp() {
 }
 
 initializeApp();
+
+// Mount React chat component
+if (typeof window !== 'undefined') {
+  import('./chat-main.tsx').then(({ mountChat }) => {
+    mountChat();
+  }).catch(err => {
+    console.error('[OpenChat] Failed to mount React chat:', err);
+  });
+}
 

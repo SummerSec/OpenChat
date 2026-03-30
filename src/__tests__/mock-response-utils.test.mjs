@@ -5,7 +5,7 @@ import {
   buildPromptAwareMergedAnswer,
   buildPromptAwareMockResponse,
   extractPromptFocus
-} from "./mock-response-utils.mjs";
+} from "../utils/mock-response-utils.mjs";
 
 test("extractPromptFocus keeps short prompts intact", () => {
   assert.equal(extractPromptFocus("做一个 AI 搜索首页"), "做一个 AI 搜索首页");

@@ -5,8 +5,8 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./mock-response-utils.mjs";
-import { buildFallbackSynthesis, buildSynthesisPromptText } from "./synthesis-utils.mjs";
+import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./src/utils/mock-response-utils.mjs";
+import { buildFallbackSynthesis, buildSynthesisPromptText } from "./src/utils/synthesis-utils.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

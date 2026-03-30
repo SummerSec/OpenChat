@@ -54,7 +54,7 @@ return { initializeApp };`
 }
 
 function loadRenderingHelpers() {
-  const source = readFileSync(new URL("./script.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../script.js", import.meta.url), "utf8");
   const start = source.indexOf("function escapeHtml(value = \"\") {");
   const end = source.indexOf("\nfunction sleep(ms) {", start);
 

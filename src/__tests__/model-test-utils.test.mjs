@@ -5,7 +5,7 @@ import {
   buildModelTestPrompt,
   describeModelTestFailure,
   describeNonJsonModelResponse
-} from "./model-test-utils.mjs";
+} from "../utils/model-test-utils.mjs";
 
 test("buildModelTestPrompt returns zh-CN prompt", () => {
   assert.equal(buildModelTestPrompt("zh-CN"), "请只回复：连接测试成功");

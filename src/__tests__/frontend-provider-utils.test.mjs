@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { detectProviderKind, hasLiveProviderConfig } from "./frontend-provider-utils.mjs";
+import { detectProviderKind, hasLiveProviderConfig } from "../utils/frontend-provider-utils.mjs";
 
 test("hasLiveProviderConfig requires baseUrl and apiKey", () => {
   assert.equal(hasLiveProviderConfig({ baseUrl: "https://api.example.com/v1", apiKey: "sk-test" }), true);

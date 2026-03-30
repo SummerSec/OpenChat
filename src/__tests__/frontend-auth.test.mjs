@@ -8,7 +8,7 @@ import {
   resolveFrontendPasswordHash,
   shouldApplyLocalModelConfig,
   shouldBootstrapLocalModels
-} from "./frontend-auth-utils.mjs";
+} from "../utils/frontend-auth-utils.mjs";
 
 test("createMd5Hex returns stable md5 hash", () => {
   assert.equal(createMd5Hex("openchat"), "1ce870e28bf13ccbd51aa0116f0de605");

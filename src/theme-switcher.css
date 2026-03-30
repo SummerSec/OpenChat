@@ -1,0 +1,173 @@
+/* =====================================================
+   Theme Switcher Component - Earth & Ink Design System
+   ===================================================== */
+
+/* Theme switcher button in sidebar */
+.theme-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-switcher-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.theme-switcher-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Theme dropdown panel */
+.theme-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  min-width: 180px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 100;
+}
+
+.theme-dropdown.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+
+.theme-dropdown-label {
+  padding: 6px 10px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-align: left;
+}
+
+.theme-option:hover {
+  background: var(--accent-soft);
+}
+
+.theme-option.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.theme-option-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Earth - Warm paper theme */
+.theme-option-icon.earth {
+  background: linear-gradient(135deg, #faf7f2 0%, #e0d8ce 100%);
+}
+
+/* Dark - Warm dark theme */
+.theme-option-icon.dark {
+  background: linear-gradient(135deg, #252320 0%, #1a1815 100%);
+}
+
+/* Forest - Deep green theme */
+.theme-option-icon.forest {
+  background: linear-gradient(135deg, #1b211d 0%, #121916 100%);
+}
+
+/* Sepia - Classic paper theme */
+.theme-option-icon.sepia {
+  background: linear-gradient(135deg, #f4ecd8 0%, #e8dcc4 100%);
+}
+
+/* Theme indicator dot */
+.theme-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-panel-solid);
+}
+
+.theme-indicator.earth {
+  background: #b45f3c;
+}
+
+.theme-indicator.dark {
+  background: #d97a52;
+}
+
+.theme-indicator.forest {
+  background: #6b9b7a;
+}
+
+.theme-indicator.sepia {
+  background: #8b5a2b;
+}
+
+/* Theme indicator dot inside button */
+.theme-indicator-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent-soft);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.theme-switcher-btn:hover .theme-indicator-dot {
+  transform: scale(1.1);
+}
+
+/* Checkmark visibility */
+.theme-option-check {
+  margin-left: auto;
+  opacity: 0;
+}
+
+.theme-option.active .theme-option-check {
+  opacity: 1;
+}

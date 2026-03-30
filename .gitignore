@@ -12,3 +12,4 @@ public/
 .worktrees/
 .worktrees/**
 docs/superpowers/
+openchat.local-models.json

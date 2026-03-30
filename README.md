@@ -1,6 +1,6 @@
 # OpenChat
 
-[中文](#中文说明) | [English](#english)
+[English](./README_en.md)
 
 ## 中文说明
 
@@ -84,11 +84,7 @@ npm run dev:server
 VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
 ```
 
-Create or update:
-
-`public/frontend-auth.json`
-
-Expected shape:
+创建或编辑 `public/frontend-auth.json`：
 
 ```json
 {
@@ -96,22 +92,19 @@ Expected shape:
 }
 ```
 
-Do not commit a real password hash that you actively use.
-
-You can generate an MD5 hash with Node:
+使用 Node 生成 MD5 哈希：
 
 ```bash
 node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
 ```
 
-不要提交你正在实际使用的真实密码哈希。
+**不要提交你正在实际使用的真实密码哈希。**
 
 ### 本地引导
 
 `frontend` 模式首次使用时，如果浏览器的 `localStorage` 中还没有模型配置，会自动加载 `public/openchat.local-models.json`。
 
 - 该文件用于本地初始化和演示环境引导
-- 仓库中的该文件应保持空占位（`{"models":[]}`），不要把真实本地模型配置提交到 GitHub
 - 浏览器中已保存的模型配置不会被覆盖
 - 如果需要重新应用该文件，清除 `localStorage` 中保存的模型配置键即可
 
@@ -124,6 +117,7 @@ node -e "console.log(require('crypto').createHash('md5').update('your-password')
 ### 构建与测试
 
 构建：
+
 ```bash
 npm run build
 npm run preview
@@ -138,13 +132,13 @@ npm test
 运行单个测试文件：
 
 ```bash
-node --test frontend-auth.test.mjs
+node --test src/__tests__/frontend-auth.test.mjs
 ```
 
 按名称筛选测试：
 
 ```bash
-node --test --test-name-pattern="frontend password" frontend-auth.test.mjs
+node --test --test-name-pattern="frontend password" src/__tests__/frontend-auth.test.mjs
 ```
 
 ### 架构
@@ -164,8 +158,8 @@ node --test --test-name-pattern="frontend password" frontend-auth.test.mjs
 
 #### 核心文件
 
-- `script.js` - 前端应用逻辑、i18n、渲染、运行模式切换、状态同步
-- `styles.css` - 全部应用样式
+- `src/script.js` - 前端应用逻辑、i18n、渲染、运行模式切换、状态同步
+- `src/styles.css` - 全部应用样式
 - `server.mjs` - 自包含的 Node HTTP 服务与提供商适配层
 - `vite.config.js` - Vite 配置
 
@@ -220,235 +214,10 @@ Node 后端：
 
 ### 说明
 
-- 自动化测试使用 Node 内置测试运行器，测试文件位于仓库根目录的 `*.test.mjs`
+- 自动化测试使用 Node 内置测试运行器，测试文件位于 `src/__tests__/` 目录
 - 当前后端使用 JSON 文件持久化，定位为轻量级 MVP
 - 后端内置适配器覆盖 OpenAI-compatible APIs、Anthropic 和 Gemini
 - 在 `backend` 模式下，历史编辑会通过 `POST /api/conversations` 回写到服务端
 - 如果后端加载失败，界面会回退到 `frontend` 模式以保持本地状态可用
 - `vendor/ai-search-hub` 可作为可选后端桥接接入 AI Search Hub
 - 若要启用真实平台执行，需要在本地 `py` 环境中安装 Python Playwright，并确保目标平台站点可访问且已登录
-
-## English
-
-OpenChat is a multi-model AI workspace for sending the same prompt to multiple AI friends, comparing their answers in one shared chat UI, and generating a single synthesis reply.
-
-### Overview
-
-- Supports two runtime modes: `frontend` and `backend`
-- `frontend` mode is browser-only and stores state in `localStorage`
-- `backend` mode uses Node.js server persistence and exposes `/api/*` routes
-- The same multi-page UI works across both modes
-
-### Capabilities
-
-- Run one prompt across multiple AI friends in the same conversation
-- Bind each friend to a model config, avatar, and personal system prompt
-- Choose which friends join the current conversation
-- Pick one synthesis friend for the final merged answer
-- Apply a shared system prompt to the current conversation
-- Stream responses incrementally through the backend
-- Save, rename, pin, share, and delete conversation history
-- Switch between Chinese and English
-- Use browser-local persistence or backend JSON persistence
-- Fall back to mock responses when a provider is not fully configured so the UI stays usable
-
-### Pages
-
-- `index.html` - main workspace and multi-friend chat UI
-- `settings.html` - model routing, provider settings, runtime mode
-- `friends.html` - AI friend management
-- `auth.html` - local account registration entry
-- `history.html` - stored conversation history
-
-### Getting Started
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Frontend development:
-
-```bash
-npm run dev
-```
-
-Start the backend server:
-
-```bash
-npm run start
-```
-
-Backend development mode:
-
-```bash
-npm run dev:server
-```
-
-Default ports:
-
-- Vite frontend: `http://127.0.0.1:4173`
-- Node backend: `http://127.0.0.1:8787`
-
-### Password Gate
-
-`frontend` mode can require a global password check before any page becomes usable.
-
-- Passwords are compared with `MD5`
-- The unlocked state is stored in `localStorage`, so it stays valid in the same browser
-- `backend` mode is not gated by this frontend-only password layer
-
-Configuration priority:
-
-1. `VITE_FRONTEND_PASSWORD_MD5` environment variable
-2. `public/frontend-auth.json`
-
-Hosted frontend builds such as Vercel:
-
-```bash
-VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
-```
-
-For local deployment, edit:
-
-`public/frontend-auth.json`
-
-Example:
-
-```json
-{
-  "frontendPasswordMd5": "<md5-hash>"
-}
-```
-
-Generate an MD5 hash with Node:
-
-```bash
-node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
-```
-
-Do not commit a real password hash that you actively use.
-
-### Local Bootstrap
-
-On first use in `frontend` mode, `public/openchat.local-models.json` is auto-loaded when the browser does not already have model configs in `localStorage`.
-
-- This file is intended for local bootstrap and demo setup
-- Keep the repository copy of this file as an empty placeholder (`{"models":[]}`); do not commit real local model configs to GitHub
-- Existing saved model configs in the browser are not overwritten
-- To re-apply the file, clear the saved model config key from `localStorage`
-
-Current local bootstrap file:
-
-- `public/openchat.local-models.json`
-
-For OpenAI-compatible gateways, prefer the full API base path, usually ending in `/v1`.
-
-### Build/Test
-
-Build:
-
-```bash
-npm run build
-npm run preview
-```
-
-Run the full test suite:
-
-```bash
-npm test
-```
-
-Run a single test file:
-
-```bash
-node --test frontend-auth.test.mjs
-```
-
-Run tests by name:
-
-```bash
-node --test --test-name-pattern="frontend password" frontend-auth.test.mjs
-```
-
-### Architecture
-
-#### `frontend` Mode
-
-- Keeps account, models, friends, group settings, and conversation history in `localStorage`
-- Can use mock responses when no live endpoint is configured
-- Uses the same pages and interaction model as `backend` mode
-
-#### `backend` Mode
-
-- Serves static files and `/api/*` routes from `server.mjs`
-- Persists data to `.data/openchat-db.json`
-- Streams run output through newline-delimited JSON
-- Stores account, models, friends, default group settings, and conversations on the server
-
-#### Core Files
-
-- `script.js` - frontend app logic, i18n, rendering, runtime switching, state sync
-- `styles.css` - all application styling
-- `server.mjs` - self-contained Node HTTP server and provider adapters
-- `vite.config.js` - Vite configuration
-
-### Backend API
-
-The current backend exposes:
-
-- `GET /api/account`
-- `POST /api/auth/register`
-- `GET /api/models`
-- `POST /api/models`
-- `GET /api/friends`
-- `POST /api/friends`
-- `GET /api/group-settings`
-- `POST /api/group-settings`
-- `GET /api/conversations`
-- `POST /api/conversations`
-- `POST /api/chat/run`
-- `POST /api/chat/run/stream`
-
-### Data Storage
-
-Backend persistence lives in:
-
-- `.data/openchat-db.json`
-
-Stored shape:
-
-```json
-{
-  "account": null,
-  "models": [],
-  "friends": [],
-  "groupSettings": {},
-  "conversations": []
-}
-```
-
-Conversation history is capped to the most recent 50 entries.
-
-### Deploy
-
-Static frontend output:
-
-- Vercel: build with `npm run build`, output `dist`
-- Cloudflare Pages: build with `npm run build`, output `dist`
-
-Node backend:
-
-- Run `node server.mjs`
-- Serve the frontend and backend from the same origin if you want `/api/*` routes without extra proxy setup
-
-### Notes
-
-- Automated tests use the Node built-in test runner and live in repo-root `*.test.mjs` files
-- The backend currently uses JSON-file persistence for a lightweight MVP
-- The backend includes adapters for OpenAI-compatible APIs, Anthropic, and Gemini
-- In `backend` mode, history edits sync back to the server through `POST /api/conversations`
-- If backend loading fails, the UI falls back to `frontend` mode so local state remains usable
-- `vendor/ai-search-hub` can be vendored as an optional backend bridge for AI Search Hub
-- To enable real platform execution, install Python Playwright in the local `py` environment and ensure the target platform site is reachable and logged in

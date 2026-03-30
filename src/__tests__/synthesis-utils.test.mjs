@@ -5,7 +5,7 @@ import {
   buildFallbackSynthesis,
   buildSynthesisPayload,
   buildSynthesisPromptText
-} from "./synthesis-utils.mjs";
+} from "../utils/synthesis-utils.mjs";
 
 test("buildSynthesisPayload includes user prompt and member outputs", () => {
   const payload = buildSynthesisPayload({

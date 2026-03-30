@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+import { renderSafeMarkdown } from "../utils/markdown-render-utils.mjs";
 
 test("renders headings emphasis inline code and links", () => {
   const html = renderSafeMarkdown("# Title\n\nA **bold** and *italic* line with `code` and [docs](https://example.com).", {

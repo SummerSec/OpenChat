@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
+import { hasThinkingContent, normalizeThinkingEnabled } from "../utils/thinking-config-utils.mjs";
 
 test("normalizeThinkingEnabled preserves explicit boolean values", () => {
   assert.equal(normalizeThinkingEnabled(true, false), true);

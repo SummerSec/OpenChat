@@ -6,19 +6,38 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "node server.mjs",
-    "test": "node --test frontend-auth.test.mjs mock-response-utils.test.mjs frontend-provider-utils.test.mjs model-test-utils.test.mjs synthesis-utils.test.mjs account-scope-utils.test.mjs features/group/friend-bootstrap-utils.test.mjs features/group/workflow-run-utils.test.mjs features/group/group-settings-utils.test.mjs thinking-config-utils.test.mjs markdown-render-utils.test.mjs script-rendering.test.mjs",
+    "test": "node --test src/__tests__/frontend-auth.test.mjs src/__tests__/mock-response-utils.test.mjs src/__tests__/frontend-provider-utils.test.mjs src/__tests__/model-test-utils.test.mjs src/__tests__/synthesis-utils.test.mjs src/__tests__/account-scope-utils.test.mjs src/__tests__/friend-bootstrap-utils.test.mjs src/__tests__/thinking-config-utils.test.mjs src/__tests__/markdown-render-utils.test.mjs src/__tests__/script-rendering.test.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.mjs"
   },
   "devDependencies": {
-    "vite": "^7.1.3"
+    "vite": "^6.4.1"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.64",
+    "@ai-sdk/google": "^3.0.53",
+    "@ai-sdk/openai": "^3.0.48",
+    "@ai-sdk/react": "^3.0.143",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "ai": "^4.3.19",
+    "autoprefixer": "^10.4.27",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.7.0",
+    "postcss": "^8.5.8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "streamdown": "^2.5.0"
+    "streamdown": "^2.5.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^3.4.19",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^6.0.2",
+    "zod": "^3.22.4",
+    "zustand": "^5.0.12"
   }
 }

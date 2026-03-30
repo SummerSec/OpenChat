@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
+import { buildScopedStorageKey, normalizeLocalAccount } from "../utils/account-scope-utils.mjs";
 
 test("normalizeLocalAccount defaults to admin/admin", () => {
   assert.deepEqual(normalizeLocalAccount({}), {

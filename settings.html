@@ -7,11 +7,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="src/theme-switcher.css" />
+    <link rel="stylesheet" href="src/styles.css" />
   </head>
   <body>
     <div id="frontend-password-modal" class="login-modal" hidden>
@@ -87,12 +88,82 @@
           <article class="workspace-panel">
             <div class="panel-header">
               <div>
-                <p class="panel-label" data-i18n="settings.routingLabel"></p>
-                <h2 data-i18n="settings.routingTitle"></h2>
+                <p class="panel-label" data-i18n="settings.appearanceLabel"></p>
+                <h2 data-i18n="settings.appearanceTitle"></h2>
               </div>
-              <span class="count-badge" id="model-count"></span>
             </div>
-            <div class="model-toggle-grid" id="model-toggle-grid"></div>
+
+            <label class="field-label" data-i18n="settings.themeLabel"></label>
+            <div class="theme-setting-grid">
+              <button class="theme-setting-option active" data-theme="light">
+                <span class="theme-setting-icon earth"></span>
+                <span data-i18n="settings.themeEarth"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="sky">
+                <span class="theme-setting-icon sky"></span>
+                <span data-i18n="settings.themeSky"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="lavender">
+                <span class="theme-setting-icon lavender"></span>
+                <span data-i18n="settings.themeLavender"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="cream">
+                <span class="theme-setting-icon cream"></span>
+                <span data-i18n="settings.themeCream"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="mint">
+                <span class="theme-setting-icon mint-light"></span>
+                <span data-i18n="settings.themeMint"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="peach">
+                <span class="theme-setting-icon peach"></span>
+                <span data-i18n="settings.themePeach"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="dark">
+                <span class="theme-setting-icon dark"></span>
+                <span data-i18n="settings.themeDark"></span>
+              </button>
+              <button class="theme-setting-option" data-theme="forest">
+                <span class="theme-setting-icon forest"></span>
+                <span data-i18n="settings.themeForest"></span>
+              </button>
+            </div>
+
+            <label class="field-label" data-i18n="settings.fontSizeLabel"></label>
+            <div class="font-size-control">
+              <div class="font-size-slider-wrapper">
+                <input
+                  type="range"
+                  id="font-size-slider"
+                  class="font-size-slider"
+                  min="10"
+                  max="24"
+                  step="1"
+                  value="14"
+                />
+                <div class="font-size-ticks">
+                  <span>10</span>
+                  <span>12</span>
+                  <span>14</span>
+                  <span>16</span>
+                  <span>18</span>
+                  <span>20</span>
+                  <span>22</span>
+                  <span>24</span>
+                </div>
+              </div>
+              <div class="font-size-input-wrapper">
+                <input
+                  type="number"
+                  id="font-size-input"
+                  class="font-size-input"
+                  min="10"
+                  max="24"
+                  value="14"
+                />
+                <span class="font-size-unit">px</span>
+              </div>
+            </div>
           </article>
         </section>
 
@@ -112,6 +183,6 @@
       </main>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script type="module" src="src/script.js"></script>
   </body>
 </html>

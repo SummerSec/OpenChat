@@ -111,6 +111,7 @@ node -e "console.log(require('crypto').createHash('md5').update('your-password')
 `frontend` 模式首次使用时，如果浏览器的 `localStorage` 中还没有模型配置，会自动加载 `public/openchat.local-models.json`。
 
 - 该文件用于本地初始化和演示环境引导
+- 仓库中的该文件应保持空占位（`{"models":[]}`），不要把真实本地模型配置提交到 GitHub
 - 浏览器中已保存的模型配置不会被覆盖
 - 如果需要重新应用该文件，清除 `localStorage` 中保存的模型配置键即可
 
@@ -123,7 +124,6 @@ node -e "console.log(require('crypto').createHash('md5').update('your-password')
 ### 构建与测试
 
 构建：
-
 ```bash
 npm run build
 npm run preview
@@ -335,6 +335,7 @@ Do not commit a real password hash that you actively use.
 On first use in `frontend` mode, `public/openchat.local-models.json` is auto-loaded when the browser does not already have model configs in `localStorage`.
 
 - This file is intended for local bootstrap and demo setup
+- Keep the repository copy of this file as an empty placeholder (`{"models":[]}`); do not commit real local model configs to GitHub
 - Existing saved model configs in the browser are not overwritten
 - To re-apply the file, clear the saved model config key from `localStorage`
 

@@ -11,9 +11,14 @@ import {
   buildSynthesisPromptText
 } from "./synthesis-utils.mjs";
 import { buildScopedStorageKey, normalizeLocalAccount } from "./account-scope-utils.mjs";
-import { shouldBootstrapDefaultFriends } from "./friend-bootstrap-utils.mjs";
+import {
+  resolveFriendProfilesForScope,
+  shouldBootstrapDefaultFriends
+} from "./features/group/friend-bootstrap-utils.mjs";
+import { countSelectedGroupMembers } from "./features/group/group-settings-utils.mjs";
+import { getWorkflowPreflightState } from "./features/group/workflow-run-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./thinking-config-utils.mjs";
-import { renderSafeMarkdown } from "./markdown-render-utils.mjs";
+import { renderAiMessageMarkdown } from "./ai-message-streamdown.jsx";
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -307,8 +312,9 @@ const I18N = {
         "\u8fd0\u884c\u4e00\u6b21\u5de5\u4f5c\u6d41\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u672c\u5730\u4fdd\u5b58\u7684\u5386\u53f2\u3002",
       running: "\u6b63\u5728\u8fd0\u884c {count} \u4f4d\u7fa4\u53cb",
       completed: "\u5df2\u5b8c\u6210 {count} \u4f4d\u7fa4\u53cb",
-      needPrompt: "\u9700\u8981\u8f93\u5165 prompt \u5e76\u81f3\u5c11\u9009\u62e9\u4e00\u4f4d\u7fa4\u53cb",
+      needPrompt: "需要输入 prompt。",
       needExistingFriends: "\u5f53\u524d\u8fd8\u6ca1\u6709 AI \u7fa4\u53cb\uff0c\u8bf7\u5148\u5728\u7fa4\u53cb\u9875\u521b\u5efa\u7fa4\u53cb\u3002",
+      needUsableFriends: "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684 AI \u7fa4\u53cb\uff0c\u8bf7\u5148\u7ed9\u7fa4\u53cb\u7ed1\u5b9a\u6709\u6548\u6a21\u578b\u5e76\u542f\u7528\u3002",
       synthesis: "\u6574\u5408",
       mock: "\u6a21\u62df\u7ed3\u679c",
       configured: "\u5df2\u914d\u7f6e",
@@ -336,8 +342,6 @@ const I18N = {
       testing: "\u6d4b\u8bd5\u4e2d...",
       testSuccess: "\u8fde\u63a5\u6210\u529f",
       testMissingConfig: "\u7f3a\u5c11 Base URL \u6216 API key",
-      backendRecommended: "\u5efa\u8bae\u540e\u7aef\u6a21\u5f0f",
-      backendRecommendedCopy: "\u8fd9\u7c7b\u6a21\u578b\u82e5\u88ab\u6d4f\u89c8\u5668 CORS \u62e6\u622a\uff0c\u66f4\u9002\u5408\u5728\u540e\u7aef\u6a21\u5f0f\u4e0b\u6d4b\u8bd5\u6216\u8fd0\u884c\u3002",
       disable: "\u505c\u7528",
       enable: "\u542f\u7528",
       customModel: "\u81ea\u5b9a\u4e49\u6a21\u578b",
@@ -501,8 +505,9 @@ const I18N = {
       noHistoryCopy: "Run the workflow to save local history.",
       running: "Running {count} friends",
       completed: "Completed {count} friends",
-      needPrompt: "Need a prompt and at least one selected friend",
+      needPrompt: "Need a prompt.",
       needExistingFriends: "No AI friends exist yet. Create friends on the Friends page first.",
+      needUsableFriends: "No usable AI friends are available yet. Bind an enabled friend to a valid model first.",
       synthesis: "synthesis",
       mock: "mock",
       configured: "configured",
@@ -527,8 +532,6 @@ const I18N = {
       testing: "Testing...",
       testSuccess: "Connection successful",
       testMissingConfig: "Missing Base URL or API key",
-      backendRecommended: "Backend recommended",
-      backendRecommendedCopy: "This model is more reliable in backend mode when browser CORS blocks direct requests.",
       disable: "Disable",
       enable: "Enable",
       customModel: "Custom model",
@@ -914,22 +917,27 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
-function renderSynthesisContent(content = "") {
-  try {
-    return `<div class="ai-card-body markdown-content">${renderSafeMarkdown(content || "")}</div>`;
-  } catch {
-    return `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
-  }
+function encodeMessageField(value = "") {
+  return escapeHtml(String(value ?? ""));
 }
 
-function renderAssistantMessageContent({ content = "", isLoading = false, kind = "", loadingBody = "" } = {}) {
+function renderAssistantMessageContent({
+  content = "",
+  isLoading = false,
+  kind = "",
+  loadingBody = "",
+  messageId = "",
+  field = "content"
+} = {}) {
   if (!content && isLoading) {
     return loadingBody;
   }
 
-  return kind === "synthesis"
-    ? renderSynthesisContent(content || "")
-    : `<div class="ai-card-body">${escapeHtml(content || "")}</div>`;
+  return `<div class="ai-card-body markdown-content streamdown-target" data-message-id="${encodeMessageField(
+    messageId
+  )}" data-field="${encodeMessageField(field)}" data-kind="${encodeMessageField(
+    kind || "assistant"
+  )}" data-loading="${isLoading ? "true" : "false"}" data-content="${encodeMessageField(content || "")}"></div>`;
 }
 
 function sleep(ms) {
@@ -1101,12 +1109,21 @@ async function loadLocalModelConfigFile() {
   }
 }
 
+function loadScopedFriendProfiles(models = modelConfigs) {
+  return normalizeFriendProfiles(
+    resolveFriendProfilesForScope({
+      storedFriendsRaw: localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.friends)),
+      storedFriends: readScopedJson(STORAGE_KEYS.friends, []),
+      incomingModels: models,
+      createDefaultFriendProfiles
+    }),
+    models
+  );
+}
+
 function reloadScopedLocalState() {
   modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, []));
-  friendProfiles = normalizeFriendProfiles(
-    readScopedJson(STORAGE_KEYS.friends, []),
-    modelConfigs
-  );
+  friendProfiles = loadScopedFriendProfiles(modelConfigs);
   defaultGroupSettings = normalizeGroupSettings(
     readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
     friendProfiles
@@ -1262,8 +1279,17 @@ function getSessionMemberIds(session = {}) {
 }
 
 function getSessionSynthesisFriend(session = {}) {
+  const friendMap = getSessionFriendMap(session);
   if (session.synthesisFriendId) {
-    return getSessionFriendMap(session).get(session.synthesisFriendId) || getFriendById(session.synthesisFriendId);
+    return friendMap.get(session.synthesisFriendId) || getFriendById(session.synthesisFriendId);
+  }
+  const earliestMemberId = getSessionMemberIds(session)[0];
+  if (earliestMemberId) {
+    return friendMap.get(earliestMemberId) || getFriendById(earliestMemberId);
+  }
+  const earliestModelName = Array.isArray(session.models) ? session.models[0] : "";
+  if (earliestModelName) {
+    return friendProfiles.find((item) => item.name === earliestModelName) || null;
   }
   if (session.synthesisModel) {
     return friendProfiles.find((item) => item.name === session.synthesisModel) || null;
@@ -1569,8 +1595,27 @@ function normalizeConversationMessage(message = {}, fallbackDate = new Date().to
 
 function buildConversationFromSession(session = {}) {
   const fallbackDate = session.updatedAt || session.createdAt || new Date().toISOString();
+  const synthesisFriend = getSessionSynthesisFriend(session);
+  const synthesisModelConfig = modelConfigs.find((item) => item.name === session.synthesisModel) || null;
   if (Array.isArray(session.messages) && session.messages.length) {
-    return session.messages.map((message) => normalizeConversationMessage(message, fallbackDate));
+    return session.messages.map((message) => {
+      const normalized = normalizeConversationMessage(message, fallbackDate);
+      if (normalized.kind !== "synthesis") {
+        return normalized;
+      }
+      return {
+        ...normalized,
+        friendId: normalized.friendId || session.synthesisFriendId || "",
+        name: `${synthesisFriend?.name || session.synthesisModel || "AI"} ${t("common.synthesis")}`,
+        avatar: synthesisFriend?.avatar || normalized.avatar,
+        modelConfigId: synthesisFriend?.modelConfigId || normalized.modelConfigId,
+        modelConfigName:
+          synthesisFriend?.modelConfigName || synthesisFriend?.name || normalized.modelConfigName,
+        provider: synthesisFriend?.provider || synthesisModelConfig?.provider || normalized.provider,
+        model: synthesisFriend?.model || synthesisModelConfig?.model || normalized.model,
+        thinkingEnabled: synthesisFriend ? Boolean(synthesisFriend.thinkingEnabled) : normalized.thinkingEnabled
+      };
+    });
   }
   const friendMap = getSessionFriendMap(session);
   const responseMessages = Array.isArray(session.responses)
@@ -1722,24 +1767,24 @@ function renderRuntime() {
 
 function renderModelSummary() {
   const members = resolveConversationFriends();
+  const synthesisFriendId = currentConversationGroupSettings.synthesisFriendId;
+  const synthesisFriend = members.find((item) => item.id === synthesisFriendId) || members[0] || null;
   const platform =
     currentConversationGroupSettings.platformFeatureEnabled && getPreferredPlatformOption(currentConversationGroupSettings);
   if (selectedModels) {
-    selectedModels.innerHTML = members
-      .map(
-        (item) => `
-          <span class="model-chip model-chip-${escapeHtml(item.id)}">
+    selectedModels.innerHTML = synthesisFriend
+      ? `
+          <span class="model-chip model-chip-${escapeHtml(synthesisFriend.id)}">
             ${renderProviderIcon(
-              item.name,
-              item.provider,
-              item.name.slice(0, 2).toUpperCase(),
-              item.avatar || item.modelAvatar
+              synthesisFriend.name,
+              synthesisFriend.provider,
+              synthesisFriend.name.slice(0, 2).toUpperCase(),
+              synthesisFriend.avatar || synthesisFriend.modelAvatar
             )}
-            <span>${escapeHtml(item.name)}</span>
+            <span>${escapeHtml(synthesisFriend.name)}</span>
           </span>
         `
-      )
-      .join("");
+      : "";
     if (platform) {
       selectedModels.innerHTML += `
         <span class="model-chip model-chip-platform">
@@ -2176,28 +2221,30 @@ function renderGroupSettingsPanel() {
 
   if (groupMemberPicker) {
     const availableFriends = getEnabledFriends();
-    groupMemberPicker.innerHTML = availableFriends.length
+    const selectedMemberCount = countSelectedGroupMembers({
+      memberIds: draftGroupSettings.memberIds,
+      availableFriends
+    });
+    const synthesisFriend = availableFriends.find((friend) => friend.id === draftGroupSettings.synthesisFriendId) || null;
+    const detailToggleLabel = t(isGroupMemberDetailsOpen ? "common.hideMemberDetails" : "common.viewMemberDetails");
+    const detailsMarkup = availableFriends.length
       ? availableFriends
           .map((friend) => {
             const checked = draftGroupSettings.memberIds.includes(friend.id);
             const model = getModelConfigById(friend.modelConfigId);
+            const modelLabel = model?.model || model?.id || friend.modelConfigId || "";
+            const synthesisBadge =
+              friend.id === draftGroupSettings.synthesisFriendId
+                ? `<span class="group-member-badge">${escapeHtml(t("home.synthesisFriend"))}</span>`
+                : "";
             return `
               <label class="group-member-option">
-                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${
-              checked ? "checked" : ""
-            } />
-                <span class="conversation-icon">
-                  ${renderProviderIcon(
-                    friend.name,
-                    model?.provider || "",
-                    friend.name.slice(0, 2).toUpperCase(),
-                    friend.avatar || model?.avatar || ""
-                  )}
-                </span>
+                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${checked ? "checked" : ""} />
                 <span class="group-member-copy">
                   <strong>${escapeHtml(friend.name)}</strong>
-                  <span>${escapeHtml(model?.name || "")}</span>
+                  <span>${escapeHtml(modelLabel)}</span>
                 </span>
+                ${synthesisBadge}
               </label>
             `;
           })
@@ -2205,6 +2252,16 @@ function renderGroupSettingsPanel() {
       : `<article class="history-item"><strong>${escapeHtml(t("common.noFriendsTitle"))}</strong><p>${escapeHtml(
           t("common.noFriendsCopy")
         )}</p></article>`;
+    groupMemberPicker.innerHTML = `
+      <div class="group-member-summary-card">
+        <div class="group-member-summary-copy">
+          <strong>${escapeHtml(t("common.friendsSelected", { count: selectedMemberCount }))}</strong>
+          <span>${escapeHtml(t("common.synthesisFriendCurrent", { name: synthesisFriend?.name || "-" }))}</span>
+        </div>
+        <button class="ghost-button" type="button" data-group-member-toggle>${escapeHtml(detailToggleLabel)}</button>
+      </div>
+      <div class="group-member-details" ${isGroupMemberDetailsOpen ? "" : "hidden"}>${detailsMarkup}</div>
+    `;
   }
 
   if (groupSharedToggle) {
@@ -2487,7 +2544,14 @@ function renderMessageStream() {
           ? `
             <details class="think-block">
               <summary class="think-summary">${escapeHtml(t("common.thinking"))}</summary>
-              <div class="think-content">${escapeHtml(item.thinking)}</div>
+              ${renderAssistantMessageContent({
+                content: item.thinking,
+                isLoading: false,
+                kind: `${item.kind || "assistant"}-thinking`,
+                loadingBody: "",
+                messageId: item.messageId,
+                field: "thinking"
+              })}
             </details>
           `
           : "";
@@ -2495,7 +2559,9 @@ function renderMessageStream() {
         content: item.content || "",
         isLoading: item.isLoading,
         kind: item.kind || "",
-        loadingBody
+        loadingBody,
+        messageId: item.messageId,
+        field: "content"
       });
       const thinkingState = item.thinkingEnabled
         ? hasThinkingContent(item)
@@ -2567,6 +2633,7 @@ function renderMessageStream() {
     })
     .join("");
 
+  renderAiMessageMarkdown(messageStream);
   scrollMessageStreamToBottom();
 }
 
@@ -2605,12 +2672,6 @@ function renderConfigGrid() {
         const testMessage = testState.message
           ? `<p class="config-test-status ${escapeHtml(testState.status || "")}">${escapeHtml(testState.message)}</p>`
           : "";
-        const backendHint =
-          runtimeMode === "frontend" && ["supercodex", "ice"].includes(String(item.provider || "").toLowerCase())
-            ? `<p class="config-backend-hint">${escapeHtml(t("common.backendRecommended"))} - ${escapeHtml(
-                t("common.backendRecommendedCopy")
-              )}</p>`
-            : "";
         const providerOptions = [...new Set([...PROVIDER_OPTIONS, item.provider].filter(Boolean))]
           .map(
             (provider) =>
@@ -2665,7 +2726,6 @@ function renderConfigGrid() {
               <span>${escapeHtml(t("common.fieldThinking"))}</span>
             </label>
           </div>
-          ${backendHint}
           ${testMessage}
           <div class="config-card-actions">
             <button class="ghost-button" data-action="test" type="button">${escapeHtml(
@@ -3193,12 +3253,22 @@ async function runWorkflow(options = {}) {
     activeHistoryIndex !== null && activeHistoryIndex >= 0 ? history[activeHistoryIndex] : null;
   const replaceCurrent = Boolean(options.replaceCurrent);
   const prompt = promptInput.value.trim() || activeSession?.prompt?.trim() || "";
-  if (!friendProfiles.length) {
+  const activeFriends = resolveConversationFriends();
+  const preflightState = getWorkflowPreflightState({
+    prompt,
+    friendProfiles,
+    activeFriends
+  });
+
+  if (preflightState === "missing_friends") {
     setRuntimeStatus(t("common.needExistingFriends"));
     return;
   }
-  const activeFriends = resolveConversationFriends();
-  if (!prompt || !activeFriends.length) {
+  if (preflightState === "missing_active_friends") {
+    setRuntimeStatus(t("common.needUsableFriends"));
+    return;
+  }
+  if (preflightState === "missing_prompt") {
     setRuntimeStatus(t("common.needPrompt"));
     return;
   }
@@ -3526,6 +3596,7 @@ function bindWorkspaceEvents() {
   groupMemberPicker?.addEventListener("click", (event) => {
     const toggleButton = event.target.closest("[data-group-member-toggle]");
     if (!toggleButton) return;
+    event.stopPropagation();
     isGroupMemberDetailsOpen = !isGroupMemberDetailsOpen;
     renderGroupSettingsPanel();
   });
@@ -4069,6 +4140,7 @@ async function initializeApp() {
   renderSynthesisOptions();
   renderModelToggleGrid();
   renderConfigGrid();
+  renderFriendGrid();
   renderHistory();
   renderConversationList();
 

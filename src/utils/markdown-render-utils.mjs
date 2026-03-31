@@ -158,6 +158,39 @@ function renderParagraph(lines) {
   return `<p>${renderInline(lines.join("\n"))}</p>`;
 }
 
+function isTableSeparator(line) {
+  return /^\|?[\s-:|]+\|[\s-:|]*$/.test(line) && line.includes("-");
+}
+
+function parseTableCells(line) {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
+function renderTable(lines) {
+  const headerCells = parseTableCells(lines[0]);
+  const dataRows = lines.slice(2);
+
+  let html = "<table><thead><tr>";
+  for (const cell of headerCells) {
+    html += `<th>${renderInline(cell)}</th>`;
+  }
+  html += "</tr></thead><tbody>";
+
+  for (const row of dataRows) {
+    if (!row.trim()) continue;
+    const cells = parseTableCells(row);
+    html += "<tr>";
+    for (let i = 0; i < headerCells.length; i++) {
+      html += `<td>${renderInline(cells[i] || "")}</td>`;
+    }
+    html += "</tr>";
+  }
+
+  html += "</tbody></table>";
+  return html;
+}
+
 function renderBlockquote(lines) {
   const normalized = lines.map((line) => line.replace(/^>\s?/, ""));
   return `<blockquote>${renderParagraph(normalized)}</blockquote>`;
@@ -207,6 +240,13 @@ export function renderSafeMarkdown(markdown) {
       continue;
     }
 
+    // Horizontal rule: ---, ***, ___
+    if (/^[-*_]{3,}\s*$/.test(line)) {
+      blocks.push("<hr>");
+      index += 1;
+      continue;
+    }
+
     if (/^```/.test(line)) {
       const fence = renderFence(lines, index);
       blocks.push(fence.html);
@@ -251,6 +291,17 @@ export function renderSafeMarkdown(markdown) {
       continue;
     }
 
+    // Table: line starting with |, followed by separator row
+    if (/^\|/.test(line) && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+      const tableLines = [];
+      while (index < lines.length && /^\|/.test(lines[index].trim())) {
+        tableLines.push(lines[index]);
+        index += 1;
+      }
+      blocks.push(renderTable(tableLines));
+      continue;
+    }
+
     const paragraphLines = [];
     while (
       index < lines.length &&
@@ -259,7 +310,9 @@ export function renderSafeMarkdown(markdown) {
       !/^(#{1,6})\s+/.test(lines[index]) &&
       !/^>\s?/.test(lines[index]) &&
       !/^[-*]\s+/.test(lines[index]) &&
-      !/^\d+\.\s+/.test(lines[index])
+      !/^\d+\.\s+/.test(lines[index]) &&
+      !/^[-*_]{3,}\s*$/.test(lines[index]) &&
+      !((/^\|/.test(lines[index])) && index + 1 < lines.length && isTableSeparator(lines[index + 1]))
     ) {
       paragraphLines.push(lines[index]);
       index += 1;

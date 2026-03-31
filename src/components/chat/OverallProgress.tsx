@@ -51,8 +51,8 @@ export function OverallProgress({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto max-w-4xl px-4 py-3">
+    <div className="w-full rounded-lg border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mt-2">
+      <div className="px-4 py-3">
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Progress value={progressValue} max={100} className="h-2" />

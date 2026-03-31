@@ -2,191 +2,154 @@
 
 [中文](./README.md)
 
-## English
+OpenChat is an open-source multi-model AI group chat workspace. Send the same message to multiple AI friends simultaneously, compare their answers side by side in a unified interface, and let an AI integration expert generate a synthesized reply.
 
-OpenChat is a multi-model AI workspace for sending the same prompt to multiple AI friends, comparing their answers in one shared chat UI, and generating a single synthesis reply.
+## Features
 
-### Overview
+- **Multi-Model Group Chat** — Send one message to multiple AI friends at once with real-time streaming responses
+- **AI Integration Expert** — Designate a friend as the integration expert to automatically synthesize all responses into a unified conclusion
+- **Expert-Only Mode** — Skip regular friends and chat directly with the integration expert, with full multi-turn context support
+- **Markdown Rendering** — Real-time Streamdown-based Markdown with code highlighting, math formulas, Mermaid diagrams, and CJK optimization
+- **Reasoning Collapse** — Auto-detects `<think>` tags and `reasoning_content`, expands during streaming and collapses on completion
+- **Copy Button** — One-click copy on all friend messages after generation completes
+- **Multi-Turn Conversations** — Each friend maintains independent conversation history for follow-up questions
+- **Group Management** — Freely choose which friends participate in each conversation, with shared system prompts
+- **Conversation History** — Save, rename, pin, share, and delete past conversations
+- **Bilingual UI** — Chinese / English toggle
+- **Dual Runtime Modes** — Pure frontend mode (localStorage) or backend mode (Node.js server persistence)
+- **Password Gate** — Optional MD5 password protection for public deployments
+- **Mock Fallback** — Auto-uses simulated responses when API keys are not configured, keeping the UI functional
 
-- Supports two runtime modes: `frontend` and `backend`
-- `frontend` mode is browser-only and stores state in `localStorage`
-- `backend` mode uses Node.js server persistence and exposes `/api/*` routes
-- The same multi-page UI works across both modes
+## Tech Stack
 
-### Capabilities
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vanilla JS + React 19 (hybrid rendering) |
+| Styling | Tailwind CSS v4 |
+| Components | shadcn/ui + AI Elements |
+| State | Zustand |
+| Build | Vite |
+| Backend | Node.js (native HTTP, no framework) |
+| AI SDK | Vercel AI SDK |
+| Markdown | Streamdown (streaming renderer) |
+| Testing | Node built-in test runner |
 
-- Run one prompt across multiple AI friends in the same conversation
-- Bind each friend to a model config, avatar, and personal system prompt
-- Choose which friends join the current conversation
-- Pick one synthesis friend for the final merged answer
-- Apply a shared system prompt to the current conversation
-- Stream responses incrementally through the backend
-- Save, rename, pin, share, and delete conversation history
-- Switch between Chinese and English
-- Use browser-local persistence or backend JSON persistence
-- Fall back to mock responses when a provider is not fully configured so the UI stays usable
+## Getting Started
 
-### Pages
-
-- `index.html` - main workspace and multi-friend chat UI
-- `settings.html` - model routing, provider settings, runtime mode
-- `friends.html` - AI friend management
-- `auth.html` - local account registration entry
-- `history.html` - stored conversation history
-
-### Getting Started
-
-Install dependencies:
+### Install Dependencies
 
 ```bash
 npm install
 ```
 
-Frontend development:
+### Frontend Development
 
 ```bash
 npm run dev
 ```
 
-Start the backend server:
+Open `http://127.0.0.1:4173` in your browser.
 
-```bash
-npm run start
-```
-
-Backend development mode:
+### Backend Development
 
 ```bash
 npm run dev:server
 ```
 
-Default ports:
+Open `http://127.0.0.1:8787` in your browser.
 
-- Vite frontend: `http://127.0.0.1:4173`
-- Node backend: `http://127.0.0.1:8787`
-
-### Password Gate
-
-`frontend` mode can require a global password check before any page becomes usable.
-
-- Passwords are compared with `MD5`
-- The unlocked state is stored in `localStorage`, so it stays valid in the same browser
-- `backend` mode is not gated by this frontend-only password layer
-
-Configuration priority:
-
-1. `VITE_FRONTEND_PASSWORD_MD5` environment variable
-2. `public/frontend-auth.json`
-
-Hosted frontend builds such as Vercel:
-
-```bash
-VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
-```
-
-Create or edit `public/frontend-auth.json`:
-
-```json
-{
-  "frontendPasswordMd5": "<md5-hash>"
-}
-```
-
-Generate an MD5 hash with Node:
-
-```bash
-node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
-```
-
-**Do not commit a real password hash that you actively use.**
-
-### Local Bootstrap
-
-On first use in `frontend` mode, `public/openchat.local-models.json` is auto-loaded when the browser does not already have model configs in `localStorage`.
-
-- This file is intended for local bootstrap and demo setup
-- Existing saved model configs in the browser are not overwritten
-- To re-apply the file, clear the saved model config key from `localStorage`
-
-Current local bootstrap file:
-
-- `public/openchat.local-models.json`
-
-For OpenAI-compatible gateways, prefer the full API base path, usually ending in `/v1`.
-
-### Build/Test
-
-Build:
+### Build
 
 ```bash
 npm run build
 npm run preview
 ```
 
-Run the full test suite:
+### Run Tests
 
 ```bash
+# Full test suite
 npm test
-```
 
-Run a single test file:
-
-```bash
+# Single test file
 node --test src/__tests__/frontend-auth.test.mjs
-```
 
-Run tests by name:
-
-```bash
+# Filter by name
 node --test --test-name-pattern="frontend password" src/__tests__/frontend-auth.test.mjs
 ```
 
-### Architecture
+## Pages
 
-#### `frontend` Mode
+| Page | Path | Description |
+|------|------|-------------|
+| Main Workspace | `index.html` | Multi-friend chat UI, message sending, synthesis replies |
+| Model Settings | `settings.html` | Model providers, API keys, base URLs, runtime mode |
+| Friend Management | `friends.html` | Add/edit AI friends, bind models, set system prompts |
+| Account Registration | `auth.html` | Local account registration |
+| Conversation History | `history.html` | Browse and manage saved conversations |
 
-- Keeps account, models, friends, group settings, and conversation history in `localStorage`
-- Can use mock responses when no live endpoint is configured
-- Uses the same pages and interaction model as `backend` mode
+## Architecture
 
-#### `backend` Mode
+### Runtime Modes
 
-- Serves static files and `/api/*` routes from `server.mjs`
-- Persists data to `.data/openchat-db.json`
-- Streams run output through newline-delimited JSON
-- Stores account, models, friends, default group settings, and conversations on the server
+**Frontend Mode**
 
-#### Core Files
+- Runs entirely in the browser, all state in `localStorage`
+- API requests go directly from the browser to each model provider
+- Suitable for personal use or static deployments
 
-- `src/script.js` - frontend app logic, i18n, rendering, runtime switching, state sync
-- `src/styles.css` - all application styling
-- `server.mjs` - self-contained Node HTTP server and provider adapters
-- `vite.config.js` - Vite configuration
+**Backend Mode**
 
-### Backend API
+- Node.js server provides `/api/*` routes and static file serving
+- Data persisted to `.data/openchat-db.json`
+- Responses streamed via NDJSON
+- API keys managed server-side for better security
 
-The current backend exposes:
+### Core Files
 
-- `GET /api/account`
-- `POST /api/auth/register`
-- `GET /api/models`
-- `POST /api/models`
-- `GET /api/friends`
-- `POST /api/friends`
-- `GET /api/group-settings`
-- `POST /api/group-settings`
-- `GET /api/conversations`
-- `POST /api/conversations`
-- `POST /api/chat/run`
-- `POST /api/chat/run/stream`
+| File | Role |
+|------|------|
+| `src/script.js` | Frontend main logic: i18n, rendering, state management, runtime switching |
+| `src/styles.css` | All styles |
+| `server.mjs` | Node HTTP server, API routes, provider adapters |
+| `vite.config.js` | Vite build configuration |
+| `src/stores/chatStore.ts` | Zustand state management (React layer) |
+| `src/chat-main.tsx` | React chat component mount entry |
+| `src/components/chat/` | React chat components (FriendChatCard, SynthesisCard, etc.) |
+| `src/components/ai-elements/` | AI Elements components (Message, Reasoning, PromptInput, etc.) |
 
-### Data Storage
+### Provider Adapters
 
-Backend persistence lives in:
+The backend includes three built-in API adapters:
 
-- `.data/openchat-db.json`
+| Adapter | Providers |
+|---------|-----------|
+| `callOpenAICompatible` | OpenAI, xAI, Kimi, DeepSeek, and all OpenAI-compatible endpoints |
+| `callAnthropic` | Anthropic Claude |
+| `callGemini` | Google Gemini |
 
-Stored shape:
+Frontend mode also supports direct calls to these providers, with streaming for OpenAI-compatible endpoints.
+
+## Backend API
+
+```
+GET  /api/account              # Get account info
+POST /api/auth/register         # Register account
+GET  /api/models                # Get model configs
+POST /api/models                # Save model configs
+GET  /api/friends               # Get friend list
+POST /api/friends               # Save friend list
+GET  /api/group-settings        # Get group settings
+POST /api/group-settings        # Save group settings
+GET  /api/conversations         # Get conversation history
+POST /api/conversations         # Save conversation history
+POST /api/chat/run              # Non-streaming run
+POST /api/chat/run/stream       # Streaming run (NDJSON)
+```
+
+## Data Storage
+
+Backend data file: `.data/openchat-db.json`
 
 ```json
 {
@@ -198,26 +161,67 @@ Stored shape:
 }
 ```
 
-Conversation history is capped to the most recent 50 entries.
+Conversation history is capped at 50 entries.
 
-### Deploy
+## Configuration
 
-Static frontend output:
+### Password Gate
 
-- Vercel: build with `npm run build`, output `dist`
-- Cloudflare Pages: build with `npm run build`, output `dist`
+Frontend mode supports optional password protection. Configuration priority:
 
-Node backend:
+1. `VITE_FRONTEND_PASSWORD_MD5` environment variable
+2. `public/frontend-auth.json`
 
-- Run `node server.mjs`
-- Serve the frontend and backend from the same origin if you want `/api/*` routes without extra proxy setup
+```json
+{
+  "frontendPasswordMd5": "<md5-hash>"
+}
+```
 
-### Notes
+Generate an MD5 hash:
 
-- Automated tests use the Node built-in test runner and live in `src/__tests__/` directory
-- The backend currently uses JSON-file persistence for a lightweight MVP
-- The backend includes adapters for OpenAI-compatible APIs, Anthropic, and Gemini
-- In `backend` mode, history edits sync back to the server through `POST /api/conversations`
-- If backend loading fails, the UI falls back to `frontend` mode so local state remains usable
+```bash
+node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
+```
+
+### Local Model Bootstrap
+
+On first use in frontend mode, if no model configs exist in `localStorage`, the app auto-loads `public/openchat.local-models.json`.
+
+- This file is for local bootstrap and demo setup only
+- Keep the repository copy as an empty placeholder (`{"models":[]}`); do not commit real API keys
+- Existing browser model configs are not overwritten
+- For OpenAI-compatible gateways, the base URL typically ends with `/v1`
+
+## Deployment
+
+### Static Frontend
+
+For Vercel, Cloudflare Pages, etc.:
+
+```bash
+npm run build
+# Output directory: dist
+```
+
+### Backend
+
+```bash
+node server.mjs
+# Default port: 8787
+```
+
+Serve frontend and backend from the same origin to use `/api/*` routes without extra proxy configuration.
+
+## Notes
+
+- Test files live in `src/__tests/` and `features/`, using the Node built-in test runner
+- Backend uses JSON file persistence, suitable for lightweight scenarios
+- History edits in backend mode sync back to the server via `POST /api/conversations`
+- If backend loading fails, the UI falls back to frontend mode to keep local state usable
 - `vendor/ai-search-hub` can be vendored as an optional backend bridge for AI Search Hub
-- To enable real platform execution, install Python Playwright in the local `py` environment and ensure the target platform site is reachable and logged in
+- Platform execution features require local Python Playwright installation and accessible target sites
+
+## License
+
+MIT

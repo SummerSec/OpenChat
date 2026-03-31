@@ -1,0 +1,197 @@
+/* ==========================================================================
+   Pretext - Typography Optimization for AI Output
+   Based on chenglou/pretext principles:
+   - Prevent widows/orphans
+   - Punctuation hanging
+   - CJK-English spacing
+   - Optimal line breaks
+   ========================================================================== */
+
+/* Base pretext container */
+.pretext {
+  /* Enable kerning and ligatures */
+  font-feature-settings: "kern" 1, "liga" 1;
+
+  /* Better text rendering */
+  text-rendering: optimizeLegibility;
+
+  /* Prevent overflow */
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+
+  /* Hyphenation */
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+
+/* CJK (Chinese, Japanese, Korean) optimizations */
+.pretext-cjk {
+  /* Line break rules for CJK */
+  line-break: strict;
+  word-break: normal;
+  overflow-wrap: break-word;
+
+  /* Better CJK punctuation */
+  punctuation-trim: start-end;
+}
+
+/* Prevent widows/orphans - keep at least 2 lines */
+.pretext p,
+.pretext li {
+  orphans: 2;
+  widows: 2;
+}
+
+/* Punctuation hanging for Western text */
+.pretext-hang {
+  /* Hang punctuation into margins */
+  hanging-punctuation: first last;
+}
+
+/* CJK punctuation spacing adjustments */
+.pretext .punct-open,
+.pretext-cjk .punct-open {
+  /* Opening brackets/parentheses - no extra space */
+  margin-right: -0.25em;
+}
+
+.pretext .punct-close,
+.pretext-cjk .punct-close {
+  /* Closing brackets/parentheses - no extra space */
+  margin-left: -0.25em;
+}
+
+.pretext .punct-fullstop,
+.pretext-cjk .punct-fullstop,
+.pretext .punct-comma,
+.pretext-cjk .punct-comma {
+  /* Full-width punctuation adjustments */
+  margin-left: -0.12em;
+}
+
+/* Space between CJK and English/numbers */
+.pretext .cjk-latin-gap::before,
+.pretext-cjk .latin::before,
+.pretext-cjk .number::before {
+  content: "\200B";
+  /* Zero-width space for word break opportunity */
+}
+
+/* Code blocks - disable pretext processing */
+.pretext pre,
+.pretext code {
+  font-feature-settings: none;
+  text-rendering: auto;
+  hanging-punctuation: none;
+  line-break: auto;
+  word-break: break-all;
+}
+
+/* Inline code - keep compact */
+.pretext code {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Blockquotes with better typography */
+.pretext blockquote {
+  hanging-punctuation: first;
+}
+
+/* Headings with balance */
+.pretext h1,
+.pretext h2,
+.pretext h3,
+.pretext h4,
+.pretext h5,
+.pretext h6 {
+  text-wrap: balance;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Prevent single word on last line */
+.pretext p {
+  text-wrap: pretty;
+}
+
+/* Long words/URLs handling */
+.pretext a {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Table cells */
+.pretext td,
+.pretext th {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* ==========================================================================
+   AI Output Specific Optimizations
+   ========================================================================== */
+
+/* AI card body with pretext */
+.ai-card-body.pretext {
+  line-height: 1.75;
+}
+
+/* Synthesis card - more compact */
+.synthesis-card .pretext {
+  line-height: 1.6;
+}
+
+/* Thinking block with pretext */
+.think-content.pretext {
+  font-size: 0.9em;
+  line-height: 1.65;
+}
+
+/* List items with better spacing */
+.pretext li {
+  margin: 0.35em 0;
+}
+
+/* Nested lists */
+.pretext li > ul,
+.pretext li > ol {
+  margin: 0.25em 0;
+}
+
+/* ==========================================================================
+   Emphasis and Strong - Better Spacing
+   ========================================================================== */
+
+.pretext em,
+.pretext strong {
+  /* Prevent emphasis from breaking */
+  display: inline;
+}
+
+/* Bold text in CJK - slightly looser */
+.pretext-cjk strong {
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Markdown Content Integration
+   ========================================================================== */
+
+.markdown-content.pretext {
+  /* Ensure smooth rendering */
+  font-variant-numeric: proportional-nums;
+}
+
+/* Streamdown renders proper HTML elements — do NOT use pre-wrap,
+   it would preserve inter-element whitespace as visible blank lines. */
+.markdown-content.streamdown-target {
+  white-space: normal;
+}
+
+/* Plain text output */
+.ai-card-body:not(.markdown-content).pretext {
+  white-space: pre-wrap;
+}

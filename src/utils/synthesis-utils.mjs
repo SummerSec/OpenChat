@@ -20,6 +20,13 @@ export function buildSynthesisPromptText({ prompt = "", language = "zh-CN", resu
   return JSON.stringify(payload, null, 2);
 }
 
+export function getDefaultSynthesisSystemPrompt(language = "zh-CN") {
+  if (language === "zh-CN") {
+    return "你负责整合多位 AI 群友的输出。请务必阅读 user_prompt 与 member_outputs，基于它们生成最终整合答案，而不是忽略群友内容重新独立作答。输出时先总结共识，再说明关键分歧，最后给出一版清晰可执行的最终回答。";
+  }
+  return "You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.";
+}
+
 export function buildFallbackSynthesis({ prompt = "", language = "zh-CN", results = [] } = {}) {
   const names = (results || []).map((item) => item.name).filter(Boolean);
   if (language === "zh-CN") {

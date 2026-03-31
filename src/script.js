@@ -8,12 +8,19 @@ import {
 import {
   buildFallbackSynthesis,
   buildSynthesisPayload,
-  buildSynthesisPromptText
+  buildSynthesisPromptText,
+  getDefaultSynthesisSystemPrompt
 } from "./utils/synthesis-utils.mjs";
 import { buildScopedStorageKey, normalizeLocalAccount } from "./utils/account-scope-utils.mjs";
-import { shouldBootstrapDefaultFriends } from "./utils/friend-bootstrap-utils.mjs";
+import {
+  resolveFriendProfilesForScope,
+  shouldBootstrapDefaultFriends
+} from "../features/group/friend-bootstrap-utils.mjs";
+import { countSelectedGroupMembers } from "../features/group/group-settings-utils.mjs";
+import { getWorkflowPreflightState } from "../features/group/workflow-run-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./utils/thinking-config-utils.mjs";
 import { renderSafeMarkdown } from "./utils/markdown-render-utils.mjs";
+import { renderAiMessageMarkdown } from "./utils/ai-message-streamdown.js";
 import {
   MessageCard,
   renderMessages,
@@ -21,7 +28,7 @@ import {
   updateMessage,
   Components
 } from "./components/message-card.js";
-import { updateMessageStream } from "./utils/streaming-typewriter.js";
+
 
 const STORAGE_KEYS = {
   runtime: "multiplechat-runtime-mode",
@@ -33,7 +40,8 @@ const STORAGE_KEYS = {
   language: "multiplechat-language",
   theme: "openchat-theme",
   fontSize: "openchat-font-size",
-  frontendAccess: "openchat-frontend-access-md5"
+  frontendAccess: "openchat-frontend-access-md5",
+  promptTemplates: "openchat-prompt-templates"
 };
 
 const FRONTEND_AUTH_ENV_HASH = import.meta.env.VITE_FRONTEND_PASSWORD_MD5 || "";
@@ -244,7 +252,9 @@ const I18N = {
       groupSettings: "\u7fa4\u8bbe\u7f6e",
       groupSettingsTitle: "\u8c03\u6574\u6210\u5458\u3001\u6574\u5408\u7fa4\u53cb\u4e0e\u7edf\u4e00 system prompt",
       memberSelection: "\u6210\u5458\u9009\u62e9",
-      synthesisFriend: "\u6574\u5408\u7fa4\u53cb",
+      synthesisToggle: "开启整合群友",
+      synthesisHint: "开启后，由指定的整合群友对其他群友的回答进行整合总结。",
+      synthesisFriend: "整合群友",
       sharedPromptToggle: "\u5f00\u542f\u7edf\u4e00 system prompt",
       sharedPromptHint:
         "\u5f53\u524d\u4f1a\u8bdd\u5f00\u542f\u540e\uff0c\u6240\u6709\u7fa4\u53cb\u90fd\u4f1a\u4f7f\u7528\u540c\u4e00\u4efd system prompt\uff0c\u5e76\u8986\u76d6\u5404\u81ea\u7684\u4e2a\u4eba prompt\u3002",
@@ -329,8 +339,9 @@ const I18N = {
         "\u8fd0\u884c\u4e00\u6b21\u5de5\u4f5c\u6d41\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u672c\u5730\u4fdd\u5b58\u7684\u5386\u53f2\u3002",
       running: "\u6b63\u5728\u8fd0\u884c {count} \u4f4d\u7fa4\u53cb",
       completed: "\u5df2\u5b8c\u6210 {count} \u4f4d\u7fa4\u53cb",
-      needPrompt: "\u9700\u8981\u8f93\u5165 prompt \u5e76\u81f3\u5c11\u9009\u62e9\u4e00\u4f4d\u7fa4\u53cb",
+      needPrompt: "需要输入 prompt。",
       needExistingFriends: "\u5f53\u524d\u8fd8\u6ca1\u6709 AI \u7fa4\u53cb\uff0c\u8bf7\u5148\u5728\u7fa4\u53cb\u9875\u521b\u5efa\u7fa4\u53cb\u3002",
+      needUsableFriends: "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684 AI \u7fa4\u53cb\uff0c\u8bf7\u5148\u7ed9\u7fa4\u53cb\u7ed1\u5b9a\u6709\u6548\u6a21\u578b\u5e76\u542f\u7528\u3002",
       synthesis: "\u6574\u5408",
       mock: "\u6a21\u62df\u7ed3\u679c",
       configured: "\u5df2\u914d\u7f6e",
@@ -359,10 +370,10 @@ const I18N = {
       testing: "\u6d4b\u8bd5\u4e2d...",
       testSuccess: "\u8fde\u63a5\u6210\u529f",
       testMissingConfig: "\u7f3a\u5c11 Base URL \u6216 API key",
-      backendRecommended: "\u5efa\u8bae\u540e\u7aef\u6a21\u5f0f",
-      backendRecommendedCopy: "\u8fd9\u7c7b\u6a21\u578b\u82e5\u88ab\u6d4f\u89c8\u5668 CORS \u62e6\u622a\uff0c\u66f4\u9002\u5408\u5728\u540e\u7aef\u6a21\u5f0f\u4e0b\u6d4b\u8bd5\u6216\u8fd0\u884c\u3002",
       disable: "\u505c\u7528",
       enable: "\u542f\u7528",
+      statusEnabled: "\u5df2\u542f\u7528",
+      statusDisabled: "\u5df2\u505c\u7528",
       delete: "\u5220\u9664",
       confirmDelete: "\u786e\u5b9a\u8981\u5220\u9664\u8fd9\u4e2a\u6a21\u578b\u5417\uff1f",
       confirmTitle: "\u786e\u8ba4\u5220\u9664",
@@ -436,7 +447,21 @@ const I18N = {
       navAccount: "\u8d26\u6237",
       navHistory: "\u5386\u53f2",
       guest: "\u672a\u767b\u5f55",
-      close: "\u5173\u95ed"
+      close: "\u5173\u95ed",
+      isIntegrationExpert: "\u8bbe\u4e3a\u6574\u5408\u4e13\u5bb6",
+      integrationExpert: "\u6574\u5408\u4e13\u5bb6",
+      integrationExpertBadge: "\u4e13\u5bb6",
+      expertOnlyMode: "\u4ec5\u4e0e\u4e13\u5bb6\u5bf9\u8bdd",
+      expertOnlyModeHint: "\u5f00\u542f\u540e\uff0c\u53ea\u6709\u6574\u5408\u4e13\u5bb6\u4f1a\u56de\u590d\uff0c\u5176\u4ed6\u7fa4\u53cb\u4e0d\u53c2\u4e0e",
+      expertOnlyNeedMessage: "\u8bf7\u5148\u53d1\u9001\u6d88\u606f",
+      expertOnlyNeedAllDone: "\u8bf7\u7b49\u5f85\u6240\u6709\u7fa4\u53cb\u56de\u590d\u5b8c\u6210",
+      expertOnlyNeedExpert: "\u8bf7\u5148\u5f00\u542fAI\u6574\u5408\u4e13\u5bb6",
+      noIntegrationExperts: "\u672a\u8bbe\u7f6e\u6574\u5408\u4e13\u5bb6",
+      copySuffix: " \u526f\u672c",
+      promptTemplatePlaceholder: "\u9009\u62e9\u6a21\u677f...",
+      promptTemplateSave: "\u4fdd\u5b58\u4e3a\u6a21\u677f",
+      promptTemplateDelete: "\u5220\u9664\u6a21\u677f",
+      promptTemplateNamePlaceholder: "\u8bf7\u8f93\u5165\u6a21\u677f\u540d\u79f0"
     }
   },
   en: {
@@ -460,6 +485,8 @@ const I18N = {
       groupSettings: "Group settings",
       groupSettingsTitle: "Members, synthesis friend, and a shared system prompt",
       memberSelection: "Members",
+      synthesisToggle: "Enable synthesis",
+      synthesisHint: "When enabled, a designated synthesis friend will merge and summarize responses from other friends.",
       synthesisFriend: "Synthesis friend",
       sharedPromptToggle: "Use one shared system prompt",
       sharedPromptHint:
@@ -543,8 +570,9 @@ const I18N = {
       noHistoryCopy: "Run the workflow to save local history.",
       running: "Running {count} friends",
       completed: "Completed {count} friends",
-      needPrompt: "Need a prompt and at least one selected friend",
+      needPrompt: "Need a prompt.",
       needExistingFriends: "No AI friends exist yet. Create friends on the Friends page first.",
+      needUsableFriends: "No usable AI friends are available yet. Bind an enabled friend to a valid model first.",
       synthesis: "synthesis",
       mock: "mock",
       configured: "configured",
@@ -570,10 +598,10 @@ const I18N = {
       testing: "Testing...",
       testSuccess: "Connection successful",
       testMissingConfig: "Missing Base URL or API key",
-      backendRecommended: "Backend recommended",
-      backendRecommendedCopy: "This model is more reliable in backend mode when browser CORS blocks direct requests.",
       disable: "Disable",
       enable: "Enable",
+      statusEnabled: "Enabled",
+      statusDisabled: "Disabled",
       delete: "Delete",
       confirmDelete: "Are you sure you want to delete this model?",
       confirmTitle: "Confirm Delete",
@@ -647,7 +675,21 @@ const I18N = {
       navAccount: "Account",
       navHistory: "History",
       guest: "Guest",
-      close: "Close"
+      close: "Close",
+      isIntegrationExpert: "Set as Integration Expert",
+      integrationExpert: "Integration Expert",
+      integrationExpertBadge: "Expert",
+      expertOnlyMode: "Chat with Expert Only",
+      expertOnlyModeHint: "When enabled, only integration experts will respond. Other friends won't participate.",
+      expertOnlyNeedMessage: "Please send a message first",
+      expertOnlyNeedAllDone: "Please wait for all friends to finish responding",
+      expertOnlyNeedExpert: "Please enable an AI integration expert first",
+      noIntegrationExperts: "No integration experts set",
+      copySuffix: " Copy",
+      promptTemplatePlaceholder: "Select template...",
+      promptTemplateSave: "Save as template",
+      promptTemplateDelete: "Delete template",
+      promptTemplateNamePlaceholder: "Enter template name"
     }
   }
 };
@@ -759,6 +801,7 @@ const groupSettingsToggleButton = document.getElementById("group-settings-toggle
 const groupSettingsCloseButton = document.getElementById("group-settings-close");
 const groupSettingsPanel = document.getElementById("group-settings-panel");
 const groupMemberPicker = document.getElementById("group-member-picker");
+const groupSynthesisToggle = document.getElementById("group-synthesis-toggle");
 const groupSynthesisSelect = document.getElementById("group-synthesis-select");
 const groupSharedToggle = document.getElementById("group-shared-toggle");
 const groupSharedPrompt = document.getElementById("group-shared-prompt");
@@ -769,6 +812,8 @@ const platformFeatureCopy = document.getElementById("platform-feature-copy");
 const platformFeatureMeta = document.getElementById("platform-feature-meta");
 const applyGroupSettingsButton = document.getElementById("apply-group-settings");
 const saveDefaultGroupSettingsButton = document.getElementById("save-default-group-settings");
+const expertOnlyToggle = document.getElementById("expert-only-toggle");
+const expertOnlyToggleLabel = document.getElementById("expert-only-toggle-label");
 
 let runtimeMode = localStorage.getItem(STORAGE_KEYS.runtime) || "frontend";
 let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
@@ -835,6 +880,7 @@ let defaultGroupSettings = normalizeGroupSettings(
 );
 let currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
 let draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
+let promptTemplates = readScopedJson(STORAGE_KEYS.promptTemplates, []);
 let currentConversation = [];
 let activeConversationId = null;
 let renderedMessageElements = new Map(); // Track rendered message elements for incremental updates
@@ -872,13 +918,17 @@ function createDefaultFriendProfiles(models = cloneDefaultModels()) {
 
 function createDefaultGroupSettings(friends = []) {
   const memberIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
+  const integrationExpertIds = friends.filter((item) => item.enabled !== false && item.isIntegrationExpert).map((item) => item.id);
   return {
     memberIds,
     sharedSystemPromptEnabled: false,
     sharedSystemPrompt: "",
     platformFeatureEnabled: false,
     preferredPlatform: "gemini",
-    synthesisFriendId: memberIds[0] || null
+    synthesisEnabled: false,
+    synthesisFriendId: memberIds[0] || null,
+    integrationExpertIds,
+    expertOnlyMode: false
   };
 }
 
@@ -889,7 +939,10 @@ function cloneGroupSettings(settings = {}) {
     sharedSystemPrompt: String(settings.sharedSystemPrompt || ""),
     platformFeatureEnabled: Boolean(settings.platformFeatureEnabled),
     preferredPlatform: String(settings.preferredPlatform || "gemini"),
-    synthesisFriendId: settings.synthesisFriendId || null
+    synthesisEnabled: Boolean(settings.synthesisEnabled),
+    synthesisFriendId: settings.synthesisFriendId || null,
+    integrationExpertIds: Array.isArray(settings.integrationExpertIds) ? [...settings.integrationExpertIds] : [],
+    expertOnlyMode: Boolean(settings.expertOnlyMode)
   };
 }
 
@@ -909,7 +962,8 @@ function normalizeFriendProfile(item = {}, models = modelConfigs) {
     modelConfigId: item.modelConfigId || models[0]?.id || "",
     systemPrompt: String(item.systemPrompt || getDefaultFriendSystemPrompt(item.name || "")),
     enabled: item.enabled !== false,
-    description: String(item.description || "")
+    description: String(item.description || ""),
+    isIntegrationExpert: Boolean(item.isIntegrationExpert)
   };
 }
 
@@ -918,13 +972,21 @@ function normalizeFriendProfiles(items = [], models = modelConfigs) {
 }
 
 function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
-  const enabledIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
+  const expertIdSet = new Set(
+    friends.filter((item) => item.enabled !== false && item.isIntegrationExpert).map((item) => item.id)
+  );
+  const enabledIds = friends
+    .filter((item) => item.enabled !== false && !item.isIntegrationExpert)
+    .map((item) => item.id);
   let memberIds = Array.isArray(settings.memberIds)
     ? settings.memberIds.filter((id) => enabledIds.includes(id))
     : [...enabledIds];
   if (!memberIds.length && enabledIds.length) {
     memberIds = [enabledIds[0]];
   }
+  const integrationExpertIds = [...expertIdSet].filter((id) =>
+    friends.some((f) => f.id === id && f.enabled !== false)
+  );
   return {
     memberIds,
     sharedSystemPromptEnabled: Boolean(settings.sharedSystemPromptEnabled),
@@ -933,8 +995,11 @@ function normalizeGroupSettings(settings = {}, friends = friendProfiles) {
     preferredPlatform: PLATFORM_OPTIONS.some((item) => item.id === settings.preferredPlatform)
       ? settings.preferredPlatform
       : "gemini",
+    synthesisEnabled: Boolean(settings.synthesisEnabled),
     synthesisFriendId:
-      memberIds.find((id) => id === settings.synthesisFriendId) || memberIds[0] || null
+      integrationExpertIds.find((id) => id === settings.synthesisFriendId) || integrationExpertIds[0] || null,
+    integrationExpertIds,
+    expertOnlyMode: Boolean(settings.expertOnlyMode)
   };
 }
 
@@ -960,10 +1025,25 @@ function getFriendProfiles() {
 
 function saveFriendProfiles() {
   writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
+  window.dispatchEvent(new CustomEvent("openchat-storage-sync"));
 }
 
 function saveDefaultGroupSettings() {
   writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
+  window.dispatchEvent(new CustomEvent("openchat-storage-sync"));
+}
+
+function savePromptTemplates() {
+  writeScopedJson(STORAGE_KEYS.promptTemplates, promptTemplates);
+  window.dispatchEvent(new CustomEvent("openchat-storage-sync"));
+}
+
+function syncPromptTemplatesToBackend() {
+  if (runtimeMode !== "backend") return Promise.resolve();
+  return apiRequest("/api/prompt-templates", {
+    method: "POST",
+    body: JSON.stringify({ promptTemplates })
+  }).catch((err) => console.warn("Failed to sync prompt templates:", err.message));
 }
 
 function getFriendById(id, items = friendProfiles) {
@@ -1083,14 +1163,35 @@ function renderSynthesisContent(content = "") {
   }
 }
 
-function renderAssistantMessageContent({ content = "", isLoading = false, kind = "", loadingBody = "" } = {}) {
+function encodeMessageField(value = "") {
+  return escapeHtml(String(value ?? ""));
+}
+
+function renderAssistantMessageContent({
+  content = "",
+  isLoading = false,
+  kind = "",
+  loadingBody = "",
+  messageId = "",
+  field = "content"
+} = {}) {
   if (!content && isLoading) {
     return loadingBody;
   }
 
-  return kind === "synthesis"
-    ? renderSynthesisContent(content || "")
-    : `<div class="ai-card-body pretext">${escapeHtml(content || "")}</div>`;
+  // Use streamdown-target for streaming support, with markdown rendering for synthesis
+  if (kind === "synthesis") {
+    return `<div class="ai-card-body markdown-content streamdown-target" data-message-id="${encodeMessageField(
+      messageId
+    )}" data-field="${encodeMessageField(field)}" data-kind="${encodeMessageField(
+      kind || "assistant"
+    )}" data-loading="${isLoading ? "true" : "false"}" data-content="${encodeMessageField(content || "")}"></div>`;
+  }
+  return `<div class="ai-card-body pretext markdown-content streamdown-target" data-message-id="${encodeMessageField(
+    messageId
+  )}" data-field="${encodeMessageField(field)}" data-kind="${encodeMessageField(
+    kind || "assistant"
+  )}" data-loading="${isLoading ? "true" : "false"}" data-content="${encodeMessageField(content || "")}"></div>`;
 }
 
 function sleep(ms) {
@@ -1262,12 +1363,21 @@ async function loadLocalModelConfigFile() {
   }
 }
 
+function loadScopedFriendProfiles(models = modelConfigs) {
+  return normalizeFriendProfiles(
+    resolveFriendProfilesForScope({
+      storedFriendsRaw: localStorage.getItem(getScopedStorageKey(STORAGE_KEYS.friends)),
+      storedFriends: readScopedJson(STORAGE_KEYS.friends, []),
+      incomingModels: models,
+      createDefaultFriendProfiles
+    }),
+    models
+  );
+}
+
 function reloadScopedLocalState() {
   modelConfigs = normalizeModelConfigs(readScopedJson(STORAGE_KEYS.models, []));
-  friendProfiles = normalizeFriendProfiles(
-    readScopedJson(STORAGE_KEYS.friends, []),
-    modelConfigs
-  );
+  friendProfiles = loadScopedFriendProfiles(modelConfigs);
   defaultGroupSettings = normalizeGroupSettings(
     readScopedJson(STORAGE_KEYS.groupSettings, createDefaultGroupSettings(friendProfiles)),
     friendProfiles
@@ -1423,8 +1533,17 @@ function getSessionMemberIds(session = {}) {
 }
 
 function getSessionSynthesisFriend(session = {}) {
+  const friendMap = getSessionFriendMap(session);
   if (session.synthesisFriendId) {
-    return getSessionFriendMap(session).get(session.synthesisFriendId) || getFriendById(session.synthesisFriendId);
+    return friendMap.get(session.synthesisFriendId) || getFriendById(session.synthesisFriendId);
+  }
+  const earliestMemberId = getSessionMemberIds(session)[0];
+  if (earliestMemberId) {
+    return friendMap.get(earliestMemberId) || getFriendById(earliestMemberId);
+  }
+  const earliestModelName = Array.isArray(session.models) ? session.models[0] : "";
+  if (earliestModelName) {
+    return friendProfiles.find((item) => item.name === earliestModelName) || null;
   }
   if (session.synthesisModel) {
     return friendProfiles.find((item) => item.name === session.synthesisModel) || null;
@@ -1735,8 +1854,27 @@ function normalizeConversationMessage(message = {}, fallbackDate = new Date().to
 
 function buildConversationFromSession(session = {}) {
   const fallbackDate = session.updatedAt || session.createdAt || new Date().toISOString();
+  const synthesisFriend = getSessionSynthesisFriend(session);
+  const synthesisModelConfig = modelConfigs.find((item) => item.name === session.synthesisModel) || null;
   if (Array.isArray(session.messages) && session.messages.length) {
-    return session.messages.map((message) => normalizeConversationMessage(message, fallbackDate));
+    return session.messages.map((message) => {
+      const normalized = normalizeConversationMessage(message, fallbackDate);
+      if (normalized.kind !== "synthesis") {
+        return normalized;
+      }
+      return {
+        ...normalized,
+        friendId: normalized.friendId || session.synthesisFriendId || "",
+        name: `${synthesisFriend?.name || session.synthesisModel || "AI"} ${t("common.synthesis")}`,
+        avatar: synthesisFriend?.avatar || normalized.avatar,
+        modelConfigId: synthesisFriend?.modelConfigId || normalized.modelConfigId,
+        modelConfigName:
+          synthesisFriend?.modelConfigName || synthesisFriend?.name || normalized.modelConfigName,
+        provider: synthesisFriend?.provider || synthesisModelConfig?.provider || normalized.provider,
+        model: synthesisFriend?.model || synthesisModelConfig?.model || normalized.model,
+        thinkingEnabled: synthesisFriend ? Boolean(synthesisFriend.thinkingEnabled) : normalized.thinkingEnabled
+      };
+    });
   }
   const friendMap = getSessionFriendMap(session);
   const responseMessages = Array.isArray(session.responses)
@@ -1829,6 +1967,25 @@ function updateConversationMessageById(messageId, patch = {}) {
   currentConversation[index] = { ...currentConversation[index], ...patch };
 }
 
+/**
+ * Build conversation history for a specific friend, excluding the current run.
+ * Returns [{role: "user"|"assistant", content: "..."}] suitable for chat API messages.
+ */
+function buildConversationHistoryForFriend(friendId, excludeRunId) {
+  const history = [];
+  for (const msg of currentConversation) {
+    if (msg.runId === excludeRunId) continue;
+    if (msg.isLoading) continue;
+    if (!msg.content) continue;
+    if (msg.kind === "user") {
+      history.push({ role: "user", content: msg.content });
+    } else if ((msg.kind === "model" || msg.kind === "synthesis") && msg.friendId === friendId) {
+      history.push({ role: "assistant", content: msg.content });
+    }
+  }
+  return history;
+}
+
 function removeMessagesByRunId(runId) {
   currentConversation = currentConversation.filter((message) => message.runId !== runId);
 }
@@ -1896,13 +2053,15 @@ function renderRuntime() {
 
 function renderModelSummary() {
   const members = resolveConversationFriends();
+  const synthesisFriendId = currentConversationGroupSettings.synthesisFriendId;
+  const synthesisFriend = members.find((item) => item.id === synthesisFriendId) || members[0] || null;
   const platform =
     currentConversationGroupSettings.platformFeatureEnabled && getPreferredPlatformOption(currentConversationGroupSettings);
   if (chatMembersLabel) {
     chatMembersLabel.textContent = t("common.friendsSelected", { count: members.length });
   }
   if (selectedModels) {
-    selectedModels.innerHTML = "";
+    // Show synthesis friend chip or platform chip
     if (platform) {
       selectedModels.innerHTML = `
         <span class="model-chip model-chip-platform">
@@ -1921,24 +2080,62 @@ function renderModelSummary() {
 function renderSynthesisOptions() {
   if (!synthModelSelect) return;
   const members = resolveConversationFriends();
+  const isSynthesisEnabled = Boolean(currentConversationGroupSettings.synthesisEnabled);
+
+  // Show/hide regenerate button based on whether synthesis is enabled
+  if (rerollSynthesisButton) {
+    rerollSynthesisButton.style.display = isSynthesisEnabled && members.length > 0 ? "" : "none";
+  }
+
+  // Update expert-only toggle visibility and disabled state
+  if (expertOnlyToggleLabel) {
+    expertOnlyToggleLabel.style.display = isSynthesisEnabled && members.length > 0 ? "" : "none";
+  }
+  if (expertOnlyToggle) {
+    const hasConversation = currentConversation.length > 0;
+    const allFriendsDone = hasConversation && currentConversation
+      .filter((m) => m.kind === "model" && !m.isSynthesis)
+      .every((m) => !m.isLoading);
+    const hasExpert = getEnabledFriends().some((f) => f.isIntegrationExpert);
+    const canEnable = hasConversation && allFriendsDone && hasExpert;
+    expertOnlyToggle.disabled = !canEnable;
+    if (expertOnlyToggleLabel) {
+      expertOnlyToggleLabel.classList.toggle("is-disabled", !canEnable);
+      // Build tooltip
+      let tooltip = "";
+      if (!hasConversation) {
+        tooltip = t("common.expertOnlyNeedMessage");
+      } else if (!allFriendsDone) {
+        tooltip = t("common.expertOnlyNeedAllDone");
+      } else if (!hasExpert) {
+        tooltip = t("common.expertOnlyNeedExpert");
+      } else {
+        tooltip = t("common.expertOnlyModeHint");
+      }
+      expertOnlyToggleLabel.title = tooltip;
+    }
+  }
+
+  // Only show friends marked as integration experts in the synthesis selector
+  // Expert friends are excluded from memberIds, so query profiles directly
+  const expertMembers = getEnabledFriends()
+    .filter((f) => f.isIntegrationExpert)
+    .map((f) => {
+      const model = getModelConfigById(f.modelConfigId);
+      return { ...f, model: model?.model || "", baseUrl: model?.baseUrl || "", apiKey: model?.apiKey || "" };
+    });
+
   const current = currentConversationGroupSettings.synthesisFriendId || synthModelSelect.value;
-  synthModelSelect.innerHTML = members
+  synthModelSelect.innerHTML = expertMembers
     .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
     .join("");
-  if (groupSynthesisSelect) {
-    groupSynthesisSelect.innerHTML = synthModelSelect.innerHTML;
-  }
-  if (!members.length) {
+  if (!expertMembers.length) {
     synthModelSelect.value = "";
-    if (groupSynthesisSelect) groupSynthesisSelect.value = "";
     return;
   }
-  const nextValue = members.some((item) => item.id === current) ? current : members[0].id;
+  const nextValue = expertMembers.some((item) => item.id === current) ? current : expertMembers[0].id;
   currentConversationGroupSettings.synthesisFriendId = nextValue;
   synthModelSelect.value = nextValue;
-  if (groupSynthesisSelect) {
-    groupSynthesisSelect.value = nextValue;
-  }
 }
 
 function getPreferredPlatformOption(groupSettings = currentConversationGroupSettings) {
@@ -1992,6 +2189,37 @@ function buildPlatformSourceLabel(platformContext, baseSource) {
  * @param {Object} options - Options including onDelta callback
  * @returns {Promise<{content: string, thinking: string}>}
  */
+
+/**
+ * Extract <think>...</think> blocks from text, returning separated content and thinking.
+ * Supports multiple <think> blocks and unclosed blocks.
+ */
+function extractThinkBlocks(text) {
+  if (!text || !text.includes("<think>")) return { content: text, thinking: "" };
+  let content = "";
+  let thinking = "";
+  let remaining = text;
+  while (remaining.length > 0) {
+    const openIdx = remaining.indexOf("<think>");
+    if (openIdx === -1) {
+      content += remaining;
+      break;
+    }
+    content += remaining.slice(0, openIdx);
+    remaining = remaining.slice(openIdx + 7);
+    const closeIdx = remaining.indexOf("</think>");
+    if (closeIdx !== -1) {
+      thinking += (thinking ? "\n" : "") + remaining.slice(0, closeIdx);
+      remaining = remaining.slice(closeIdx + 8);
+    } else {
+      // Unclosed think block — treat rest as thinking
+      thinking += (thinking ? "\n" : "") + remaining;
+      remaining = "";
+    }
+  }
+  return { content: content.trim(), thinking: thinking.trim() };
+}
+
 async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = "", options = {}) {
   console.debug("[Stream] Starting OpenAI compatible stream call", {
     model: model.model,
@@ -2001,6 +2229,9 @@ async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = 
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
+  }
+  if (Array.isArray(options.history) && options.history.length > 0) {
+    messages.push(...options.history);
   }
   messages.push({ role: "user", content: prompt });
 
@@ -2040,6 +2271,8 @@ async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = 
   let buffer = "";
   let fullContent = "";
   let fullThinking = "";
+  // Track <think> block state for models that embed thinking in content (e.g. MiniMax, DeepSeek)
+  let insideThinkTag = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -2051,28 +2284,70 @@ async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = 
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+      if (!trimmed) continue;
 
-      const data = trimmed.slice(6); // Remove "data: " prefix
+      // Support both SSE format ("data: {json}") and NDJSON format ("{json}")
+      let data;
+      if (trimmed.startsWith("data:")) {
+        data = trimmed.slice(5).trimStart();
+      } else if (trimmed.startsWith("{")) {
+        data = trimmed;
+      } else {
+        continue;
+      }
       if (data === "[DONE]") continue;
 
       try {
         const chunk = JSON.parse(data);
         const delta = chunk.choices?.[0]?.delta;
-        if (!delta) continue;
-
-        // Handle content
-        if (delta.content) {
-          fullContent += delta.content;
-          console.debug("[Stream] Content delta", { length: delta.content.length, total: fullContent.length });
-          options.onDelta?.({ type: "content", text: delta.content });
+        if (!delta) {
+          console.debug("[Stream] No delta in chunk, choices:", JSON.stringify(chunk.choices?.length));
+          continue;
         }
 
-        // Handle reasoning/thinking
+        // Method 1: delta.reasoning_content (e.g. DeepSeek, Kimi)
         if (delta.reasoning_content) {
           fullThinking += delta.reasoning_content;
-          console.debug("[Stream] Thinking delta", { length: delta.reasoning_content.length, total: fullThinking.length });
           options.onDelta?.({ type: "thinking", text: delta.reasoning_content });
+        }
+
+        // Method 2: <think> tags embedded in delta.content (e.g. MiniMax)
+        // Also handles normal content without think tags
+        if (delta.content) {
+          let text = delta.content;
+          while (text.length > 0) {
+            if (insideThinkTag) {
+              const closeIdx = text.indexOf("</think>");
+              if (closeIdx !== -1) {
+                const thinkPart = text.slice(0, closeIdx);
+                if (thinkPart) {
+                  fullThinking += thinkPart;
+                  options.onDelta?.({ type: "thinking", text: thinkPart });
+                }
+                insideThinkTag = false;
+                text = text.slice(closeIdx + 8);
+              } else {
+                fullThinking += text;
+                options.onDelta?.({ type: "thinking", text });
+                text = "";
+              }
+            } else {
+              const openIdx = text.indexOf("<think>");
+              if (openIdx !== -1) {
+                const contentPart = text.slice(0, openIdx);
+                if (contentPart) {
+                  fullContent += contentPart;
+                  options.onDelta?.({ type: "content", text: contentPart });
+                }
+                insideThinkTag = true;
+                text = text.slice(openIdx + 7);
+              } else {
+                fullContent += text;
+                options.onDelta?.({ type: "content", text });
+                text = "";
+              }
+            }
+          }
         }
       } catch {
         // Skip invalid JSON
@@ -2080,13 +2355,28 @@ async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = 
     }
   }
 
-  return { content: fullContent.trim(), thinking: fullThinking.trim() };
+  console.debug("[Stream] FINISHED. fullContent length:", fullContent.length, "fullThinking length:", fullThinking.length, "preview:", fullContent.slice(0, 100));
+
+  // Post-process: if <think> tags were split across chunks and ended up in content,
+  // re-extract them from the accumulated result
+  let finalContent = fullContent.trim();
+  let finalThinking = fullThinking.trim();
+  if (!finalThinking && finalContent.includes("<think>")) {
+    const extracted = extractThinkBlocks(finalContent);
+    finalContent = extracted.content;
+    finalThinking = extracted.thinking;
+  }
+
+  return { content: finalContent, thinking: finalThinking };
 }
 
 async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "", options = {}) {
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
+  }
+  if (Array.isArray(options.history) && options.history.length > 0) {
+    messages.push(...options.history);
   }
   messages.push({ role: "user", content: prompt });
   const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/chat/completions`, {
@@ -2111,18 +2401,24 @@ async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "", op
   }
   const data = await response.json();
   const message = data.choices?.[0]?.message || {};
-  const content =
+  let content =
     typeof message.content === "string"
       ? message.content
       : Array.isArray(message.content)
       ? message.content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
       : "";
-  const thinking =
+  let thinking =
     typeof message.reasoning_content === "string"
       ? message.reasoning_content
       : Array.isArray(message.reasoning_content)
       ? message.reasoning_content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
       : "";
+  // Extract <think> blocks from content (e.g. MiniMax, some DeepSeek modes)
+  const extracted = extractThinkBlocks(content);
+  if (extracted.thinking) {
+    thinking = thinking ? `${thinking}\n\n${extracted.thinking}` : extracted.thinking;
+    content = extracted.content;
+  }
   return { content: content.trim(), thinking: thinking.trim() };
 }
 
@@ -2139,7 +2435,10 @@ async function callAnthropicFrontend(model, prompt, systemPrompt = "", options =
       max_tokens: 1200,
       system: systemPrompt || undefined,
       ...(options.thinkingEnabled ? { thinking: { type: "enabled", budget_tokens: 1024 } } : {}),
-      messages: [{ role: "user", content: prompt }]
+      messages: [
+        ...(Array.isArray(options.history) ? options.history : []),
+        { role: "user", content: prompt }
+      ]
     })
   });
   if (!response.ok) {
@@ -2169,7 +2468,10 @@ async function callAnthropicFrontend(model, prompt, systemPrompt = "", options =
 }
 
 async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}) {
-  void options;
+  const historyContents = (Array.isArray(options.history) ? options.history : []).map((msg) => ({
+    role: msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.content }]
+  }));
   const response = await fetch(
     `${String(model.baseUrl || "").replace(/\/+$/, "")}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
     {
@@ -2178,12 +2480,14 @@ async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
         contents: [
+          ...historyContents,
           {
             role: "user",
             parts: [
               {
-                text: systemPrompt ? `${systemPrompt}\n\n用户问题：${prompt}` : prompt
+                text: prompt
               }
             ]
           }
@@ -2207,8 +2511,9 @@ async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}
   };
 }
 
-async function generateFrontendFriendResponse(friend, prompt, platformContext, targetId) {
+async function generateFrontendFriendResponse(friend, prompt, platformContext, targetId, runId) {
   console.debug("[Frontend Response] Generating response for friend:", friend.name, friend.id, "hasLiveProviderConfig:", hasLiveProviderConfig(friend));
+  const history = buildConversationHistoryForFriend(friend.id, runId);
   const systemPrompt = `${
     currentConversationGroupSettings.sharedSystemPromptEnabled
       ? currentConversationGroupSettings.sharedSystemPrompt
@@ -2256,37 +2561,43 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
 
       output = await callOpenAICompatibleFrontendStream(friend, prompt, systemPrompt, {
         thinkingEnabled: Boolean(friend.thinkingEnabled),
-        onDelta: async (delta) => {
+        history,
+        onDelta: (delta) => {
           if (delta.type === "thinking") {
             currentThinking += delta.text;
             updateConversationMessageById(targetId, {
               thinking: currentThinking,
               isLoading: true
             });
-            // 流式更新 - 增量动画更新
-            try {
-              await updateMessageStream(targetId, currentThinking, false, true);
-            } catch (err) {
-              console.warn("[StreamRenderer] Failed to update thinking stream:", err);
-            }
           } else if (delta.type === "content") {
             currentContent += delta.text;
             updateConversationMessageById(targetId, {
               content: currentContent,
               isLoading: true
             });
-            // 流式更新 - 增量动画更新
-            try {
-              await updateMessageStream(targetId, currentContent, false, true);
-            } catch (err) {
-              console.warn("[StreamRenderer] Failed to update content stream:", err);
-            }
           }
+          renderMessageStream();
         }
       });
 
-      // Mark streaming complete - 只更新状态，不再调用 renderMessageStream
-      updateConversationMessageById(targetId, { isLoading: false });
+      // Post-process: if <think> tags were split across chunks and ended up in content,
+      // re-extract them from the accumulated result
+      let finalContent = output.content || "";
+      let finalThinking = output.thinking || "";
+      if (!finalThinking && finalContent.includes("<think>")) {
+        const extracted = extractThinkBlocks(finalContent);
+        finalContent = extracted.content;
+        finalThinking = extracted.thinking;
+      }
+
+      // Mark streaming complete and sync final content/thinking into conversation message
+      updateConversationMessageById(targetId, {
+        content: finalContent,
+        thinking: finalThinking,
+        isLoading: false
+      });
+      renderMessageStream();
+      renderSynthesisOptions();
 
       return {
         friendId: friend.id,
@@ -2297,8 +2608,8 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
         provider: friend.provider,
         model: friend.model,
         source: buildPlatformSourceLabel(platformContext, t("common.configured")),
-        thinking: output.thinking || "",
-        content: output.content || "",
+        thinking: finalThinking,
+        content: finalContent,
         error: ""
       };
     }
@@ -2306,15 +2617,18 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
     // Non-streaming for Anthropic and Gemini (fallback)
     if (providerKind === "anthropic") {
       output = await callAnthropicFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
+        thinkingEnabled: Boolean(friend.thinkingEnabled),
+        history
       });
     } else if (providerKind === "gemini") {
       output = await callGeminiFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
+        thinkingEnabled: Boolean(friend.thinkingEnabled),
+        history
       });
     } else {
       output = await callOpenAICompatibleFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
+        thinkingEnabled: Boolean(friend.thinkingEnabled),
+        history
       });
     }
 
@@ -2385,9 +2699,8 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
     language: currentLanguage,
     results
   });
-  const systemPrompt = currentLanguage === "zh-CN"
-    ? `你负责整合多位 AI 群友的输出。请务必阅读 user_prompt 与 member_outputs，基于它们生成最终整合答案，而不是忽略群友内容重新独立作答。输出时先总结共识，再说明关键分歧，最后给出一版清晰可执行的最终回答。${buildPlatformPromptAddon(platformContext)}`
-    : `You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.${buildPlatformPromptAddon(platformContext)}`;
+  const basePrompt = synthesisFriend.systemPrompt || getDefaultSynthesisSystemPrompt(currentLanguage);
+  const systemPrompt = `${basePrompt}${buildPlatformPromptAddon(platformContext)}`;
 
   if (!hasLiveProviderConfig(synthesisFriend)) {
     const fallbackContent = buildFallbackSynthesis({ prompt, language: currentLanguage, results });
@@ -2408,20 +2721,36 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
     // Use streaming for OpenAI compatible providers
     if (providerKind !== "anthropic" && providerKind !== "gemini" && targetId) {
       let currentContent = "";
+      let currentThinking = "";
 
       output = await callOpenAICompatibleFrontendStream(synthesisFriend, synthesisPrompt, systemPrompt, {
         thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled),
         onDelta: (delta) => {
-          if (delta.type === "content") {
+          if (delta.type === "thinking") {
+            currentThinking += delta.text;
+            updateConversationMessageById(targetId, {
+              thinking: currentThinking,
+              isLoading: true
+            });
+          } else if (delta.type === "content") {
             currentContent += delta.text;
             updateConversationMessageById(targetId, {
               content: currentContent,
-              isLoading: false
+              isLoading: true
             });
-            renderMessageStream();
           }
+          renderMessageStream();
         }
       });
+
+      // Mark streaming complete and sync final content
+      updateConversationMessageById(targetId, {
+        content: output.content || "",
+        thinking: output.thinking || "",
+        isLoading: false
+      });
+      renderMessageStream();
+      renderSynthesisOptions();
 
       return {
         content: output.content || "",
@@ -2565,31 +2894,25 @@ function renderGroupSettingsPanel() {
 
   if (groupMemberPicker) {
     const availableFriends = getEnabledFriends();
-    groupMemberPicker.innerHTML = availableFriends.length
-      ? availableFriends
+    const selectedMemberCount = countSelectedGroupMembers({
+      memberIds: draftGroupSettings.memberIds,
+      availableFriends
+    });
+    const detailToggleLabel = t(isGroupMemberDetailsOpen ? "common.hideMemberDetails" : "common.viewMemberDetails");
+    const selectableFriends = availableFriends.filter((f) => !f.isIntegrationExpert);
+    const detailsMarkup = selectableFriends.length
+      ? selectableFriends
           .map((friend) => {
             const checked = draftGroupSettings.memberIds.includes(friend.id);
             const model = getModelConfigById(friend.modelConfigId);
+            const modelLabel = model?.model || model?.id || friend.modelConfigId || "";
             return `
               <label class="group-member-option">
-                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${
-              checked ? "checked" : ""
-            } />
-                <span class="group-member-avatar">
-                  <span class="conversation-icon">
-                    ${renderProviderIcon(
-                      friend.name,
-                      model?.provider || "",
-                      friend.name.slice(0, 2).toUpperCase(),
-                      friend.avatar || model?.avatar || ""
-                    )}
-                  </span>
-                </span>
+                <input type="checkbox" data-group-member-id="${escapeHtml(friend.id)}" ${checked ? "checked" : ""} />
                 <span class="group-member-copy">
                   <strong>${escapeHtml(friend.name)}</strong>
-                  <span>${escapeHtml(model?.name || "")}</span>
+                  <span>${escapeHtml(modelLabel)}</span>
                 </span>
-                <span class="group-member-checkbox"></span>
               </label>
             `;
           })
@@ -2597,6 +2920,15 @@ function renderGroupSettingsPanel() {
       : `<article class="history-item"><strong>${escapeHtml(t("common.noFriendsTitle"))}</strong><p>${escapeHtml(
           t("common.noFriendsCopy")
         )}</p></article>`;
+    groupMemberPicker.innerHTML = `
+      <div class="group-member-summary-card">
+        <div class="group-member-summary-copy">
+          <strong>${escapeHtml(t("common.friendsSelected", { count: selectedMemberCount }))}</strong>
+        </div>
+        <button class="ghost-button" type="button" data-group-member-toggle>${escapeHtml(detailToggleLabel)}</button>
+      </div>
+      <div class="group-member-details" ${isGroupMemberDetailsOpen ? "" : "hidden"}>${detailsMarkup}</div>
+    `;
   }
 
   if (groupSharedToggle) {
@@ -2632,16 +2964,22 @@ function renderGroupSettingsPanel() {
     platformFeatureMeta.textContent = buildPlatformFeatureMeta(platform);
   }
 
+  if (groupSynthesisToggle) {
+    groupSynthesisToggle.checked = Boolean(draftGroupSettings.synthesisEnabled);
+  }
+
   if (groupSynthesisSelect) {
-    const members = resolveConversationFriends(draftGroupSettings);
-    groupSynthesisSelect.innerHTML = members
+    // Expert friends are excluded from memberIds, so query profiles directly
+    const expertMembers = getEnabledFriends().filter((f) => f.isIntegrationExpert);
+    groupSynthesisSelect.innerHTML = expertMembers
       .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
       .join("");
     groupSynthesisSelect.value =
-      members.find((item) => item.id === draftGroupSettings.synthesisFriendId)?.id || members[0]?.id || "";
-    if (!members.length) {
+      expertMembers.find((item) => item.id === draftGroupSettings.synthesisFriendId)?.id || expertMembers[0]?.id || "";
+    if (!expertMembers.length) {
       groupSynthesisSelect.value = "";
     }
+    groupSynthesisSelect.disabled = !draftGroupSettings.synthesisEnabled;
   }
 }
 
@@ -2833,18 +3171,29 @@ function renderMessageStream() {
     suggestionRow.classList.toggle("is-hidden", currentConversation.length > 0);
   }
 
+  // Remove empty state as soon as conversation has messages
+  if (currentConversation.length > 0) {
+    const emptyState = messageStream.querySelector(".stream-empty-state");
+    if (emptyState) emptyState.remove();
+  }
+
   if (!currentConversation.length) {
-    messageStream.innerHTML = `
-      <div class="stream-empty-state">
-        <div class="stream-empty-mark">OC</div>
-        <strong class="stream-empty-title">${escapeHtml(
-          currentLanguage === "zh-CN"
-            ? "\u4eca\u5929\u6709\u4ec0\u4e48\u53ef\u4ee5\u5e2e\u5230\u4f60\uff1f"
-            : "What can I help you with today?"
-        )}</strong>
-        <p class="stream-empty-copy">${escapeHtml(t("home.heroCopy"))}</p>
-      </div>
+    // Preserve the React #chat-root mount point
+    Array.from(messageStream.children).forEach((child) => {
+      if (child.id !== "chat-root") child.remove();
+    });
+    const emptyState = document.createElement("div");
+    emptyState.className = "stream-empty-state";
+    emptyState.innerHTML = `
+      <div class="stream-empty-mark">OC</div>
+      <strong class="stream-empty-title">${escapeHtml(
+        currentLanguage === "zh-CN"
+          ? "\u4eca\u5929\u6709\u4ec0\u4e48\u53ef\u4ee5\u5e2e\u5230\u4f60\uff1f"
+          : "What can I help you with today?"
+      )}</strong>
+      <p class="stream-empty-copy">${escapeHtml(t("home.heroCopy"))}</p>
     `;
+    messageStream.insertBefore(emptyState, messageStream.firstChild);
     renderedMessageElements.clear();
     scrollMessageStreamToBottom();
     return;
@@ -2853,7 +3202,7 @@ function renderMessageStream() {
   // Track which messages are currently in the conversation
   const currentMessageIds = new Set(currentConversation.map((item) => item.messageId));
 
-  // Remove elements for messages that no longer exist
+// Remove elements for messages that no longer exist
   for (const [messageId, element] of renderedMessageElements.entries()) {
     if (!currentMessageIds.has(messageId)) {
       element.remove();
@@ -2866,7 +3215,7 @@ function renderMessageStream() {
     const existingElement = renderedMessageElements.get(item.messageId);
 
     if (!existingElement) {
-      // Create new message card
+      // Create new message card using MessageCard component
       const card = MessageCard(item, {
         userName: currentLanguage === "zh-CN" ? "我" : "You",
         synthesisLabel: currentLanguage === "zh-CN" ? "整合" : "Merged",
@@ -2874,39 +3223,52 @@ function renderMessageStream() {
         onCopy: () => copyMessageToClipboard(item)
       });
 
-      // Insert at correct position (maintain order)
-      const nextElement = messageStream.children[index];
+      // Insert at correct position (maintain order), skipping #chat-root
+      const nonReactChildren = Array.from(messageStream.children).filter((c) => c.id !== "chat-root");
+      const nextElement = nonReactChildren[index];
       if (nextElement) {
         messageStream.insertBefore(card, nextElement);
       } else {
-        messageStream.appendChild(card);
-      }
-
-      renderedMessageElements.set(item.messageId, card);
-
-      // For new messages with content, apply typewriter effect (仅初始渲染)
-      if (item.content && !item.isLoading) {
-        updateMessageStream(item.messageId, item.content, true).catch((err) => {
-          console.warn("[RenderMessageStream] Failed to apply typewriter effect:", err);
-        });
-      }
-    } else {
-      // 流式消息由 typewriter 直接操作 DOM，不在这里重复渲染
-      // 只更新非流式消息的头部状态（如加载完成标记）
-      if (!item.isLoading && item.content) {
-        const contentNode = existingElement.querySelector(".streamdown-target");
-        const currentContent = contentNode?.dataset.content || "";
-        if (currentContent !== item.content) {
-          updateMessageStream(item.messageId, item.content, false).catch((err) => {
-            console.warn("[RenderMessageStream] Failed to update existing message:", err);
-          });
+        const chatRoot = document.getElementById("chat-root");
+        if (chatRoot) {
+          messageStream.insertBefore(card, chatRoot);
+        } else {
+          messageStream.appendChild(card);
         }
       }
 
-      // Update thinking section if present
-      const thinkingNode = existingElement.querySelector(".think-content");
-      if (thinkingNode && item.thinking) {
-        thinkingNode.textContent = item.thinking;
+      renderedMessageElements.set(item.messageId, card);
+    } else {
+      // Sync content/loading onto .streamdown-target
+      const contentNode = existingElement.querySelector(".streamdown-target");
+      if (contentNode) {
+        contentNode.dataset.content = item.content || "";
+        contentNode.dataset.loading = String(Boolean(item.isLoading));
+      } else {
+        console.debug("[Render] .streamdown-target NOT FOUND for", item.messageId);
+      }
+
+      // Remove skeleton loader once content arrives OR generation is done
+      if (item.content || !item.isLoading) {
+        const skeleton = existingElement.querySelector(".ai-card-loading");
+        if (skeleton) skeleton.remove();
+      }
+
+      // Update thinking section — create if missing, update if present
+      if (item.thinking) {
+        const thinkingNode = existingElement.querySelector(".think-content");
+        if (thinkingNode) {
+          thinkingNode.textContent = item.thinking;
+        } else {
+          // Dynamically create ThinkingBlock when thinking arrives during streaming
+          const bubble = existingElement.querySelector(".message-bubble");
+          if (bubble && !bubble.querySelector(".ai-bubble-thinking")) {
+            const thinkingSection = Components.h("div", { className: "ai-bubble-thinking" }, [
+              Components.ThinkingBlock({ thinking: item.thinking })
+            ]);
+            bubble.insertBefore(thinkingSection, bubble.firstChild);
+          }
+        }
       }
 
       // Update loading state in header
@@ -2914,15 +3276,30 @@ function renderMessageStream() {
       if (roleBadge) {
         const isGenerating = item.isLoading;
         const currentText = roleBadge.textContent;
-        const targetText = isGenerating ? "生成中" : "AI 群友";
+        const targetText = isGenerating ? "\u751F\u6210\u4E2D" : "AI \u7FA4\u53CB";
         if (currentText !== targetText) {
           roleBadge.textContent = targetText;
           roleBadge.classList.toggle("message-role--loading", isGenerating);
         }
       }
+
+      // Add copy button when streaming completes (cards created with isLoading:true lack it)
+      if (!item.isLoading && item.kind !== "user") {
+        const messageHead = existingElement.querySelector(".message-head");
+        if (messageHead && !messageHead.querySelector(".message-actions")) {
+          const actionsDiv = Components.h("div", { className: "message-actions" }, [
+            Components.CopyButton({
+              onCopy: () => copyMessageToClipboard(item),
+              label: currentLanguage === "zh-CN" ? "复制" : "Copy"
+            })
+          ]);
+          messageHead.appendChild(actionsDiv);
+        }
+      }
     }
   });
 
+  renderAiMessageMarkdown(messageStream);
   scrollMessageStreamToBottom();
 }
 
@@ -3059,8 +3436,12 @@ function renderFriendGrid() {
             }>${escapeHtml(model.name)}</option>`
         )
         .join("");
+      const isDisabled = friend.enabled === false;
+      const statusBadge = isDisabled
+        ? `<span class="friend-status-badge friend-status-disabled">${escapeHtml(t("common.statusDisabled"))}</span>`
+        : `<span class="friend-status-badge friend-status-enabled">${escapeHtml(t("common.statusEnabled"))}</span>`;
       return `
-        <article class="config-card" data-friend-id="${escapeHtml(friend.id)}">
+        <article class="config-card${isDisabled ? " config-card-disabled" : ""}" data-friend-id="${escapeHtml(friend.id)}">
           <div class="config-card-brand">
             <button
               class="config-card-icon config-card-avatar-button"
@@ -3089,7 +3470,11 @@ function renderFriendGrid() {
                 <strong>${escapeHtml(friend.name)}</strong>
                 <span>${escapeHtml(friend.description || boundModel?.name || "")}</span>
               </div>
-              <span class="friend-model-chip">${escapeHtml(boundModel?.name || "")}</span>
+              <div class="friend-card-chips">
+                <span class="friend-model-chip">${escapeHtml(boundModel?.name || "")}</span>
+                ${statusBadge}
+                ${friend.isIntegrationExpert ? `<span class="friend-status-badge friend-status-expert">${escapeHtml(t("common.integrationExpertBadge"))}</span>` : ""}
+              </div>
             </div>
           </div>
           <div class="config-form">
@@ -3098,9 +3483,23 @@ function renderFriendGrid() {
             <label class="field-label">${escapeHtml(t("common.fieldBoundModel"))}</label>
             <select class="inline-select" data-friend-field="modelConfigId">${selectOptions}</select>
             <label class="field-label">${escapeHtml(t("common.fieldSystemPrompt"))}</label>
+            <div class="prompt-template-row">
+              <select class="inline-select prompt-template-select" data-friend-template-select="${escapeHtml(friend.id)}">
+                <option value="">${escapeHtml(t("common.promptTemplatePlaceholder"))}</option>
+                ${promptTemplates.map((tpl) => `<option value="${escapeHtml(tpl.id)}">${escapeHtml(tpl.name)}</option>`).join("")}
+              </select>
+              <button class="ghost-button prompt-template-save-btn" type="button" data-friend-template-save="${escapeHtml(friend.id)}">${escapeHtml(t("common.promptTemplateSave"))}</button>
+              <button class="ghost-button prompt-template-delete-btn" type="button" data-friend-template-delete="${escapeHtml(friend.id)}">${escapeHtml(t("common.promptTemplateDelete"))}</button>
+            </div>
             <textarea data-friend-field="systemPrompt" rows="6">${escapeHtml(friend.systemPrompt || "")}</textarea>
             <label class="field-label">${escapeHtml(t("common.fieldDescription"))}</label>
             <input class="text-input" data-friend-field="description" value="${escapeHtml(friend.description || "")}" />
+          </div>
+          <div class="config-card-toggles">
+            <label class="friend-expert-toggle">
+              <input type="checkbox" data-friend-field="isIntegrationExpert" ${friend.isIntegrationExpert ? "checked" : ""} />
+              <span>${escapeHtml(t("common.integrationExpert"))}</span>
+            </label>
           </div>
           <div class="config-card-actions">
             <button class="ghost-button" data-friend-action="toggle" type="button">${escapeHtml(
@@ -3464,12 +3863,13 @@ function persistConversation({
 async function loadBackendState() {
   if (runtimeMode !== "backend") return;
   try {
-    const [accountData, modelData, friendData, groupSettingsData, conversationData] = await Promise.all([
+    const [accountData, modelData, friendData, groupSettingsData, conversationData, templateData] = await Promise.all([
       apiRequest("/api/account"),
       apiRequest("/api/models"),
       apiRequest("/api/friends"),
       apiRequest("/api/group-settings"),
-      apiRequest("/api/conversations")
+      apiRequest("/api/conversations"),
+      apiRequest("/api/prompt-templates")
     ]);
     if (accountData.account) {
       writeJson(STORAGE_KEYS.account, normalizeLocalAccount(accountData.account));
@@ -3490,6 +3890,10 @@ async function loadBackendState() {
     }
     if (Array.isArray(conversationData.conversations)) {
       saveHistoryItems(conversationData.conversations);
+    }
+    if (Array.isArray(templateData.promptTemplates)) {
+      promptTemplates = templateData.promptTemplates;
+      writeScopedJson(STORAGE_KEYS.promptTemplates, promptTemplates);
     }
     reconcileGroupStates();
     defaultGroupSettings = normalizeGroupSettings(defaultGroupSettings, friendProfiles);
@@ -3601,12 +4005,53 @@ async function runWorkflow(options = {}) {
     activeHistoryIndex !== null && activeHistoryIndex >= 0 ? history[activeHistoryIndex] : null;
   const replaceCurrent = Boolean(options.replaceCurrent);
   const prompt = promptInput.value.trim() || activeSession?.prompt?.trim() || "";
-  if (!friendProfiles.length) {
+  let activeFriends = resolveConversationFriends();
+
+  // Handle expert-only mode
+  const expertOnlyMode = Boolean(expertOnlyToggle?.checked);
+  const integrationExpertIds = currentConversationGroupSettings.integrationExpertIds || [];
+  // Integration experts are excluded from memberIds/activeFriends by design,
+  // so resolve them directly from friend profiles (same as synthesis friend resolution).
+  const resolvedExpertFriends = integrationExpertIds
+    .map((id) => getFriendById(id))
+    .filter((f) => f && f.enabled !== false && f.isIntegrationExpert)
+    .map((profile) => {
+      const model = getModelConfigById(profile.modelConfigId);
+      return {
+        ...profile,
+        modelConfigName: model?.name || "",
+        provider: model?.provider || "",
+        model: model?.model || "",
+        baseUrl: model?.baseUrl || "",
+        apiKey: model?.apiKey || "",
+        thinkingEnabled: Boolean(model?.thinkingEnabled),
+        modelAvatar: model?.avatar || ""
+      };
+    })
+    .filter((f) => f.modelConfigName);
+  const expertFriends = resolvedExpertFriends;
+  const nonExpertFriends = activeFriends.filter((f) => !integrationExpertIds.includes(f.id));
+
+  // If expert-only mode, only include expert friends
+  if (expertOnlyMode && resolvedExpertFriends.length > 0) {
+    activeFriends = resolvedExpertFriends;
+  }
+
+  const preflightState = getWorkflowPreflightState({
+    prompt,
+    friendProfiles,
+    activeFriends
+  });
+
+  if (preflightState === "missing_friends") {
     setRuntimeStatus(t("common.needExistingFriends"));
     return;
   }
-  const activeFriends = resolveConversationFriends();
-  if (!prompt || !activeFriends.length) {
+  if (preflightState === "missing_active_friends") {
+    setRuntimeStatus(t("common.needUsableFriends"));
+    return;
+  }
+  if (preflightState === "missing_prompt") {
     setRuntimeStatus(t("common.needPrompt"));
     return;
   }
@@ -3628,17 +4073,53 @@ async function runWorkflow(options = {}) {
 
   const runId = createConversationId();
   const createdAt = new Date().toISOString();
-  const synthesisFriend =
-    activeFriends.find((item) => item.id === (synthModelSelect?.value || currentConversationGroupSettings.synthesisFriendId)) ||
-    activeFriends[0];
+
+  // Determine if we should show synthesis (only if synthesisEnabled)
+  // Integration experts are excluded from activeFriends/memberIds,
+  // so resolve the synthesis friend directly from friend profiles.
+  const isSynthesisEnabled = Boolean(currentConversationGroupSettings.synthesisEnabled);
+  const synthesisFriendId = synthModelSelect?.value || currentConversationGroupSettings.synthesisFriendId;
+  let synthesisFriend = null;
+  if (isSynthesisEnabled && synthesisFriendId) {
+    const profile = getFriendById(synthesisFriendId);
+    if (profile && profile.isIntegrationExpert && profile.enabled !== false) {
+      const model = getModelConfigById(profile.modelConfigId);
+      synthesisFriend = {
+        ...profile,
+        modelConfigName: model?.name || "",
+        provider: model?.provider || "",
+        model: model?.model || "",
+        baseUrl: model?.baseUrl || "",
+        apiKey: model?.apiKey || "",
+        thinkingEnabled: Boolean(model?.thinkingEnabled)
+      };
+    }
+  }
+  // If no active regular friends to synthesize, skip synthesis
+  if (synthesisFriend && activeFriends.length === 0) {
+    synthesisFriend = null;
+  }
+  // In expert-only mode, expert responds directly — skip synthesis
+  if (expertOnlyMode && synthesisFriend) {
+    synthesisFriend = null;
+  }
+
   const platformContext = getPlatformRoutingContext(currentConversationGroupSettings);
   const platformPromptAddon = buildPlatformPromptAddon(platformContext);
-  currentConversationGroupSettings.synthesisFriendId = synthesisFriend.id;
+  if (synthesisFriend) {
+    currentConversationGroupSettings.synthesisFriendId = synthesisFriend.id;
+  }
   const userMessage = normalizeConversationMessage(
     { role: "user", kind: "user", content: prompt, createdAt },
     createdAt
   );
   userMessage.runId = runId;
+
+  // Separate friends into experts and non-experts for sequential processing
+  const currentExpertFriends = expertOnlyMode ? [] : expertFriends.filter((f) => activeFriends.some((af) => af.id === f.id));
+  const currentNonExpertFriends = expertOnlyMode ? [] : nonExpertFriends.filter((f) => activeFriends.some((af) => af.id === f.id));
+  const friendsToRespondFirst = expertOnlyMode ? activeFriends : currentNonExpertFriends;
+  const expertFriendsToRespond = expertOnlyMode ? [] : currentExpertFriends;
 
   const friendPlaceholders = activeFriends.map((friend) => {
     const message = normalizeConversationMessage(
@@ -3661,29 +4142,36 @@ async function runWorkflow(options = {}) {
     return message;
   });
 
-  const synthesisPlaceholder = normalizeConversationMessage(
-    {
-      role: "assistant",
-      kind: "synthesis",
-      friendId: synthesisFriend.id,
-      name: `${synthesisFriend.name} ${t("common.synthesis")}`,
-      avatar: synthesisFriend.avatar || synthesisFriend.modelAvatar || "",
-      modelConfigId: synthesisFriend.modelConfigId,
-      modelConfigName: synthesisFriend.modelConfigName,
-      provider: synthesisFriend.provider,
-      model: synthesisFriend.model,
-      createdAt,
-      isLoading: true
-    },
-    createdAt
-  );
-  synthesisPlaceholder.runId = runId;
+  // Only create synthesis placeholder if there are integration experts
+  let synthesisPlaceholder = null;
+  if (synthesisFriend) {
+    synthesisPlaceholder = normalizeConversationMessage(
+      {
+        role: "assistant",
+        kind: "synthesis",
+        friendId: synthesisFriend.id,
+        name: `${synthesisFriend.name} ${t("common.synthesis")}`,
+        avatar: synthesisFriend.avatar || synthesisFriend.modelAvatar || "",
+        modelConfigId: synthesisFriend.modelConfigId,
+        modelConfigName: synthesisFriend.modelConfigName,
+        provider: synthesisFriend.provider,
+        model: synthesisFriend.model,
+        createdAt,
+        isLoading: true
+      },
+      createdAt
+    );
+    synthesisPlaceholder.runId = runId;
+  }
 
   const previousConversation = replaceCurrent ? [...currentConversation] : null;
   if (replaceCurrent) {
     currentConversation = [];
   }
-  currentConversation = currentConversation.concat(userMessage, ...friendPlaceholders, synthesisPlaceholder);
+  currentConversation = currentConversation.concat(
+    userMessage,
+    ...friendPlaceholders
+  );
   renderMessageStream();
 
   let results = [];
@@ -3698,10 +4186,21 @@ async function runWorkflow(options = {}) {
           [item.name, item.messageId]
         ])
       );
+      // Build condensed conversation history for the backend
+      const conversationHistory = currentConversation
+        .filter((msg) => msg.runId !== runId && !msg.isLoading && msg.content)
+        .map((msg) => ({
+          role: msg.role,
+          kind: msg.kind,
+          friendId: msg.friendId || "",
+          content: msg.content
+        }));
+
       await apiRunWorkflowStream(
         {
           prompt,
           language: currentLanguage,
+          conversationHistory,
           friends: activeFriends.map((friend) => ({
             id: friend.id,
             name: friend.name,
@@ -3740,8 +4239,7 @@ async function runWorkflow(options = {}) {
               if (!id) return;
               const current = currentConversation.find((item) => item.messageId === id);
               updateConversationMessageById(id, {
-                content: `${current?.content || ""}${event.delta || ""}`,
-                isLoading: false
+                content: `${current?.content || ""}${event.delta || ""}`
               });
               renderMessageStream();
               return;
@@ -3755,15 +4253,19 @@ async function runWorkflow(options = {}) {
                 isLoading: false
               });
               renderMessageStream();
+              renderSynthesisOptions();
               return;
             }
             if (event.type === "synthesis_delta") {
+              // Add synthesis placeholder to conversation on first synthesis delta
+              if (synthesisPlaceholder && !currentConversation.some((m) => m.messageId === synthesisPlaceholder.messageId)) {
+                currentConversation.push(synthesisPlaceholder);
+              }
               const current = currentConversation.find(
                 (item) => item.messageId === synthesisPlaceholder.messageId
               );
               updateConversationMessageById(synthesisPlaceholder.messageId, {
-                content: `${current?.content || ""}${event.delta || ""}`,
-                isLoading: false
+                content: `${current?.content || ""}${event.delta || ""}`
               });
               renderMessageStream();
               return;
@@ -3772,10 +4274,16 @@ async function runWorkflow(options = {}) {
               results = Array.isArray(event.results) ? event.results : [];
               mergedAnswer = event.mergedAnswer || mergedAnswer;
               disagreements = Array.isArray(event.disagreements) ? event.disagreements : disagreements;
-              updateConversationMessageById(synthesisPlaceholder.messageId, {
-                content: mergedAnswer,
-                isLoading: false
-              });
+              // Add synthesis placeholder if not yet added (e.g. no synthesis_delta was sent)
+              if (synthesisPlaceholder && !currentConversation.some((m) => m.messageId === synthesisPlaceholder.messageId)) {
+                currentConversation.push(synthesisPlaceholder);
+              }
+              if (synthesisPlaceholder) {
+                updateConversationMessageById(synthesisPlaceholder.messageId, {
+                  content: mergedAnswer,
+                  isLoading: false
+                });
+              }
               renderMessageStream();
             }
           }
@@ -3787,41 +4295,113 @@ async function runWorkflow(options = {}) {
         friendPlaceholders.map((item) => [item.friendId, item.messageId])
       );
 
-      // Fetch all friend responses concurrently with streaming
-      results = await Promise.all(
-        activeFriends.map((friend) => {
-          const targetId = friendIdToMessageId.get(friend.id);
-          return generateFrontendFriendResponse(friend, prompt, platformContext, targetId);
-        })
-      );
+      // Sequential processing: non-experts first, then experts
+      let nonExpertResults = [];
+      let expertResults = [];
 
-      // Final update for all messages (ensure source/error state is set)
-      for (let index = 0; index < results.length; index += 1) {
-        const result = results[index];
-        const targetId = friendPlaceholders[index].messageId;
-        updateConversationMessageById(targetId, {
-          source: result.source,
-          error: result.error || "",
+      // Phase 1: Run non-expert friends first (if not in expert-only mode)
+      if (!expertOnlyMode && friendsToRespondFirst.length > 0) {
+        nonExpertResults = await Promise.all(
+          friendsToRespondFirst.map((friend) => {
+            const targetId = friendIdToMessageId.get(friend.id);
+            return generateFrontendFriendResponse(friend, prompt, platformContext, targetId, runId);
+          })
+        );
+
+        // Update non-expert messages
+        for (const result of nonExpertResults) {
+          const targetId = friendIdToMessageId.get(result.friendId);
+          if (targetId) {
+            updateConversationMessageById(targetId, {
+              source: result.source,
+              error: result.error || "",
+              isLoading: false
+            });
+          }
+        }
+        renderMessageStream();
+      }
+
+      // Phase 2: Run expert friends with context from non-experts
+      if (expertFriendsToRespond.length > 0) {
+        // Build context from non-expert responses
+        const contextFromNonExperts = nonExpertResults.map((r) => ({
+          name: r.name,
+          content: r.content || ""
+        }));
+
+        expertResults = await Promise.all(
+          expertFriendsToRespond.map((friend) => {
+            const targetId = friendIdToMessageId.get(friend.id);
+            // For experts, include non-expert responses in the prompt
+            const expertPrompt = nonExpertResults.length > 0
+              ? `${prompt}\n\n其他群友的回答：\n${contextFromNonExperts.map((c) => `【${c.name}】: ${c.content}`).join("\n\n")}`
+              : prompt;
+            return generateFrontendFriendResponse(friend, expertPrompt, platformContext, targetId, runId);
+          })
+        );
+
+        // Update expert messages
+        for (const result of expertResults) {
+          const targetId = friendIdToMessageId.get(result.friendId);
+          if (targetId) {
+            updateConversationMessageById(targetId, {
+              source: result.source,
+              error: result.error || "",
+              isLoading: false
+            });
+          }
+        }
+        renderMessageStream();
+      }
+
+      // Combine results
+      results = [...nonExpertResults, ...expertResults];
+
+      // If in expert-only mode, just run all active friends
+      if (expertOnlyMode) {
+        results = await Promise.all(
+          activeFriends.map((friend) => {
+            const targetId = friendIdToMessageId.get(friend.id);
+            return generateFrontendFriendResponse(friend, prompt, platformContext, targetId, runId);
+          })
+        );
+
+        for (const result of results) {
+          const targetId = friendIdToMessageId.get(result.friendId);
+          if (targetId) {
+            updateConversationMessageById(targetId, {
+              source: result.source,
+              error: result.error || "",
+              isLoading: false
+            });
+          }
+        }
+        renderMessageStream();
+      }
+
+      // Only run synthesis AFTER all friends have completed
+      if (synthesisFriend && synthesisPlaceholder) {
+        // Add synthesis placeholder to conversation now (after all friends done)
+        currentConversation.push(synthesisPlaceholder);
+        renderMessageStream();
+
+        const synthesisResult = await generateFrontendSynthesisResponse(
+          synthesisFriend,
+          prompt,
+          results,
+          platformContext,
+          synthesisPlaceholder.messageId
+        );
+        mergedAnswer = synthesisResult.content;
+        // Final update for synthesis (source/error state)
+        updateConversationMessageById(synthesisPlaceholder.messageId, {
+          source: synthesisResult.source,
+          error: synthesisResult.error || "",
           isLoading: false
         });
+        renderMessageStream();
       }
-      renderMessageStream();
-
-      const synthesisResult = await generateFrontendSynthesisResponse(
-        synthesisFriend,
-        prompt,
-        results,
-        platformContext,
-        synthesisPlaceholder.messageId
-      );
-      mergedAnswer = synthesisResult.content;
-      // Final update for synthesis (source/error state)
-      updateConversationMessageById(synthesisPlaceholder.messageId, {
-        source: synthesisResult.source,
-        error: synthesisResult.error || "",
-        isLoading: false
-      });
-      renderMessageStream();
     }
 
     persistConversation({
@@ -3833,7 +4413,7 @@ async function runWorkflow(options = {}) {
       createdAt,
       results
     });
-    setRuntimeStatus(t("common.completed", { count: activeFriends.length }));
+    setRuntimeStatus(t("common.completed", { count: activeFriends.length + (synthesisFriend ? 1 : 0) }));
   } catch (error) {
     if (replaceCurrent && previousConversation) {
       currentConversation = previousConversation;
@@ -3929,6 +4509,9 @@ function bindWorkspaceEvents() {
     currentConversationGroupSettings = cloneGroupSettings(defaultGroupSettings);
     draftGroupSettings = cloneGroupSettings(defaultGroupSettings);
     isGroupSettingsOpen = false;
+    if (expertOnlyToggle) {
+      expertOnlyToggle.checked = false;
+    }
     if (promptInput) {
       promptInput.value = "";
       autosizePromptInput();
@@ -3940,6 +4523,35 @@ function bindWorkspaceEvents() {
     renderSynthesisOptions();
     renderGroupSettingsPanel();
     renderMessageStream();
+  });
+
+  expertOnlyToggle?.addEventListener("change", () => {
+    if (expertOnlyToggle.checked) {
+      // Validate before enabling
+      const hasConversation = currentConversation.length > 0;
+      const allFriendsDone = hasConversation && currentConversation
+        .filter((m) => m.kind === "model" && !m.isSynthesis)
+        .every((m) => !m.isLoading);
+      const hasExpert = getEnabledFriends().some((f) => f.isIntegrationExpert);
+
+      if (!hasConversation) {
+        expertOnlyToggle.checked = false;
+        setRuntimeStatus(t("common.expertOnlyNeedMessage"));
+        return;
+      }
+      if (!allFriendsDone) {
+        expertOnlyToggle.checked = false;
+        setRuntimeStatus(t("common.expertOnlyNeedAllDone"));
+        return;
+      }
+      if (!hasExpert) {
+        expertOnlyToggle.checked = false;
+        setRuntimeStatus(t("common.expertOnlyNeedExpert"));
+        return;
+      }
+    }
+    currentConversationGroupSettings.expertOnlyMode = Boolean(expertOnlyToggle.checked);
+    renderSynthesisOptions();
   });
 
   groupSettingsToggleButton?.addEventListener("click", () => {
@@ -3960,6 +4572,7 @@ function bindWorkspaceEvents() {
   groupMemberPicker?.addEventListener("click", (event) => {
     const toggleButton = event.target.closest("[data-group-member-toggle]");
     if (!toggleButton) return;
+    event.stopPropagation();
     isGroupMemberDetailsOpen = !isGroupMemberDetailsOpen;
     renderGroupSettingsPanel();
   });
@@ -3977,7 +4590,10 @@ function bindWorkspaceEvents() {
       draftGroupSettings.memberIds = draftGroupSettings.memberIds.filter((id) => id !== groupMemberId);
     }
     draftGroupSettings = normalizeGroupSettings(draftGroupSettings, friendProfiles);
-    renderGroupSettingsPanel();
+    // Defer re-render so the browser finishes processing the checkbox toggle
+    // before we replace the DOM; avoids a re-render mid-event that can reset
+    // the checkbox in some browsers.
+    requestAnimationFrame(() => renderGroupSettingsPanel());
   });
 
   groupSharedToggle?.addEventListener("change", () => {
@@ -3996,6 +4612,11 @@ function bindWorkspaceEvents() {
 
   groupPlatformSelect?.addEventListener("change", () => {
     draftGroupSettings.preferredPlatform = groupPlatformSelect.value || PLATFORM_OPTIONS[0]?.id || "gemini";
+    renderGroupSettingsPanel();
+  });
+
+  groupSynthesisToggle?.addEventListener("change", () => {
+    draftGroupSettings.synthesisEnabled = groupSynthesisToggle.checked;
     renderGroupSettingsPanel();
   });
 
@@ -4184,7 +4805,7 @@ function bindSettingsEvents() {
       const newConfig = {
         ...current,
         id: generateId(),
-        name: current.name + " (Copy)",
+        name: current.name + t("common.copySuffix"),
         enabled: true
       };
       modelConfigs.push(newConfig);
@@ -4300,6 +4921,42 @@ function bindSettingsEvents() {
 
 function bindFriendEvents() {
   friendGrid?.addEventListener("click", async (event) => {
+    // Template save button
+    const saveBtn = event.target.closest("[data-friend-template-save]");
+    if (saveBtn) {
+      const friendId = saveBtn.dataset.friendTemplateSave;
+      const card = friendGrid.querySelector(`[data-friend-id="${friendId}"]`);
+      const textarea = card?.querySelector('[data-friend-field="systemPrompt"]');
+      const content = textarea?.value || "";
+      if (!content.trim()) return;
+      const name = prompt(t("common.promptTemplateNamePlaceholder"));
+      if (!name || !name.trim()) return;
+      promptTemplates = [{
+        id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: name.trim(),
+        content
+      }, ...promptTemplates];
+      savePromptTemplates();
+      await syncPromptTemplatesToBackend();
+      rerenderAll();
+      return;
+    }
+
+    // Template delete button
+    const deleteBtn = event.target.closest("[data-friend-template-delete]");
+    if (deleteBtn) {
+      const friendId = deleteBtn.dataset.friendTemplateDelete;
+      const card = friendGrid.querySelector(`[data-friend-id="${friendId}"]`);
+      const select = card?.querySelector("[data-friend-template-select]");
+      const selectedId = select?.value;
+      if (!selectedId) return;
+      promptTemplates = promptTemplates.filter((tpl) => tpl.id !== selectedId);
+      savePromptTemplates();
+      await syncPromptTemplatesToBackend();
+      rerenderAll();
+      return;
+    }
+
     const button = event.target.closest("[data-friend-action]");
     if (!button) return;
     const card = button.closest("[data-friend-id]");
@@ -4334,6 +4991,7 @@ function bindFriendEvents() {
 
     const current = getFriendById(id);
     if (!current) return;
+    const expertCheckbox = card.querySelector('[data-friend-field="isIntegrationExpert"]');
     updateFriendProfileById(id, {
       name: card.querySelector('[data-friend-field="name"]')?.value.trim() || current.name,
       modelConfigId:
@@ -4341,14 +4999,31 @@ function bindFriendEvents() {
       systemPrompt:
         card.querySelector('[data-friend-field="systemPrompt"]')?.value ?? current.systemPrompt,
       description:
-        card.querySelector('[data-friend-field="description"]')?.value.trim() || current.description
+        card.querySelector('[data-friend-field="description"]')?.value.trim() || current.description,
+      isIntegrationExpert: expertCheckbox ? expertCheckbox.checked : current.isIntegrationExpert,
     });
     saveFriendProfiles();
-    await syncFriendProfilesToBackend();
+    saveDefaultGroupSettings();
+    await Promise.all([syncFriendProfilesToBackend(), syncGroupSettingsToBackend()]);
     rerenderAll();
   });
 
   friendGrid?.addEventListener("change", async (event) => {
+    // Template selection
+    const templateSelect = event.target.closest("[data-friend-template-select]");
+    if (templateSelect) {
+      const templateId = templateSelect.value;
+      if (!templateId) return;
+      const template = promptTemplates.find((tpl) => tpl.id === templateId);
+      if (!template) return;
+      const card = templateSelect.closest("[data-friend-id]");
+      if (!card) return;
+      const textarea = card.querySelector('[data-friend-field="systemPrompt"]');
+      if (textarea) textarea.value = template.content;
+      return;
+    }
+
+    // Avatar file input
     const input = event.target.closest("[data-friend-avatar-input]");
     if (!input?.files?.length) return;
     const [file] = input.files;

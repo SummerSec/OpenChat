@@ -1,0 +1,456 @@
+/**
+ * Message Card Styles - Vercel AI Elements inspired
+ * Glassmorphism design with component-based architecture
+ */
+
+/* ============================================================================
+   Message Row - Layout container
+   ============================================================================ */
+
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3, 0.75rem);
+  padding: var(--spacing-4, 1rem);
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-row.user {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.message-row.assistant {
+  flex-direction: row;
+}
+
+.message-row.synthesis-row {
+  --message-accent: var(--accent-brand, #6366f1);
+}
+
+/* ============================================================================
+   Avatar Component
+   ============================================================================ */
+
+.message-avatar {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-xl, 0.75rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow: hidden;
+  position: relative;
+  margin-top: 0.25rem;
+}
+
+.avatar-user {
+  background: linear-gradient(135deg, var(--accent-brand, #6366f1), var(--accent-lavender, #818cf8));
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.avatar-assistant {
+  background: var(--tile, rgba(255, 255, 255, 0.6));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.2));
+  backdrop-filter: blur(8px);
+  color: var(--text-primary, #1e1b4b);
+}
+
+.avatar-synthesis {
+  background: linear-gradient(135deg, var(--accent-brand, #6366f1), var(--accent-mint, #10b981));
+  color: white;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================================
+   Message Stack - Content container
+   ============================================================================ */
+
+.message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+  max-width: min(85%, 48rem);
+}
+
+.user .message-stack {
+  align-items: flex-end;
+}
+
+.assistant .message-stack {
+  align-items: flex-start;
+}
+
+/* ============================================================================
+   Message Header
+   ============================================================================ */
+
+.message-head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 0.5rem);
+  font-size: 0.75rem;
+  padding: 0 var(--spacing-2, 0.5rem);
+}
+
+.message-head-user {
+  justify-content: flex-end;
+}
+
+/* Message Actions (Copy button, etc.) */
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.message-row:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.875rem;
+  transition: all 140ms ease;
+}
+
+.message-action-btn:hover {
+  background: var(--accent-soft, rgba(180, 95, 60, 0.1));
+  color: var(--accent, #b45f3c);
+}
+
+.message-action-btn.copied {
+  color: var(--success, #4a7c59);
+  background: var(--success-soft, rgba(74, 124, 89, 0.1));
+}
+
+.copy-icon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.message-name {
+  font-weight: 600;
+  color: var(--text-primary, #1e1b4b);
+}
+
+.message-role {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary, #6b7280);
+  background: var(--fill-subtle, rgba(0, 0, 0, 0.05));
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+}
+
+.message-role--loading {
+  color: var(--accent-brand, #6366f1);
+  background: rgba(99, 102, 241, 0.1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.message-time {
+  color: var(--text-tertiary, #9ca3af);
+  font-size: 0.6875rem;
+}
+
+.synthesis-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: white;
+  background: linear-gradient(90deg, var(--accent-brand, #6366f1), var(--accent-mint, #10b981));
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.3);
+}
+
+/* ============================================================================
+   Message Bubble
+   ============================================================================ */
+
+.message-bubble {
+  padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+  border-radius: var(--radius-2xl, 1rem);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  word-wrap: break-word;
+}
+
+.user .message-bubble {
+  background: linear-gradient(135deg, var(--accent-brand, #6366f1), var(--accent-lavender, #818cf8));
+  color: white;
+  border-bottom-right-radius: var(--radius-sm, 0.25rem);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.ai-bubble {
+  background: var(--tile, rgba(255, 255, 255, 0.7));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.3));
+  backdrop-filter: blur(12px);
+  color: var(--text-primary, #1e1b4b);
+  border-bottom-left-radius: var(--radius-sm, 0.25rem);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.synthesis-bubble {
+  background: linear-gradient(135deg,
+    rgba(99, 102, 241, 0.08),
+    rgba(16, 185, 129, 0.05)
+  );
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  box-shadow:
+    0 1px 3px rgba(99, 102, 241, 0.1),
+    0 4px 16px rgba(99, 102, 241, 0.1);
+}
+
+.ai-bubble.is-loading {
+  min-width: 12rem;
+}
+
+/* ============================================================================
+   Message Content - Markdown rendering
+   ============================================================================ */
+
+.ai-bubble-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+.message-content.markdown-body {
+  /* Markdown styles */
+}
+
+.message-content.markdown-body p {
+  margin: 0 0 0.75rem;
+}
+
+.message-content.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content.markdown-body pre {
+  background: var(--fill-subtle, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: var(--radius-lg, 0.5rem);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.message-content.markdown-body code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875em;
+}
+
+.message-content.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.message-content.markdown-body :not(pre) > code {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-brand, #6366f1);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm, 0.25rem);
+}
+
+.message-content.markdown-body ul,
+.message-content.markdown-body ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.message-content.markdown-body li {
+  margin: 0.25rem 0;
+}
+
+.message-content.markdown-body blockquote {
+  margin: 0.75rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--accent-brand, #6366f1);
+  color: var(--text-secondary, #4b5563);
+}
+
+/* ============================================================================
+   Thinking Block (Collapsible)
+   ============================================================================ */
+
+.ai-bubble-thinking {
+  margin-bottom: var(--spacing-2, 0.5rem);
+}
+
+/* think-block styles are defined in styles.css */
+
+/* ============================================================================
+   Skeleton Loader
+   ============================================================================ */
+
+.ai-card-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.skeleton-line {
+  height: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    var(--fill-subtle, rgba(0, 0, 0, 0.06)) 25%,
+    var(--fill-muted, rgba(0, 0, 0, 0.1)) 50%,
+    var(--fill-subtle, rgba(0, 0, 0, 0.06)) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm, 0.25rem);
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.w-60 { width: 60%; }
+.w-72 { width: 72%; }
+.w-84 { width: 84%; }
+.w-90 { width: 90%; }
+.w-100 { width: 100%; }
+
+/* ============================================================================
+   Provider Icon
+   ============================================================================ */
+
+.provider-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .message-row {
+    padding: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-2, 0.5rem);
+  }
+
+  .message-avatar {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.625rem;
+    margin-top: 0.125rem;
+  }
+
+  .message-stack {
+    max-width: calc(100% - 3rem);
+  }
+
+  .message-bubble {
+    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    font-size: 0.875rem;
+  }
+}
+
+/* ============================================================================
+   Dark Mode Support (if applicable)
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  .ai-bubble {
+    background: rgba(30, 27, 75, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f3f4f6;
+  }
+
+  .avatar-assistant {
+    background: rgba(30, 27, 75, 0.6);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .message-name {
+    color: #f3f4f6;
+  }
+
+  .skeleton-line {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 25%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 75%
+    );
+    background-size: 200% 100%;
+  }
+}
+
+/* ============================================================================
+   Reduced Motion
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .message-row {
+    animation: none;
+  }
+
+  .skeleton-line {
+    animation: none;
+    background: var(--fill-subtle, rgba(0, 0, 0, 0.06));
+  }
+
+  .think-toggle-btn,
+  .message-role--loading {
+    animation: none;
+  }
+}

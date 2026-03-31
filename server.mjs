@@ -5,8 +5,12 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { streamText, generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./src/utils/mock-response-utils.mjs";
-import { buildFallbackSynthesis, buildSynthesisPromptText } from "./src/utils/synthesis-utils.mjs";
+import { buildFallbackSynthesis, buildSynthesisPromptText, getDefaultSynthesisSystemPrompt } from "./src/utils/synthesis-utils.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,6 +109,7 @@ function createDefaultGroupSettings(friends = []) {
     sharedSystemPrompt: "",
     platformFeatureEnabled: false,
     preferredPlatform: "gemini",
+    synthesisEnabled: false,
     synthesisFriendId: memberIds[0] || null
   };
 }
@@ -114,7 +119,12 @@ function normalizeBaseUrl(url) {
 }
 
 function normalizeGroupSettings(settings = {}, friends = []) {
-  const enabledIds = friends.filter((item) => item.enabled !== false).map((item) => item.id);
+  const expertIds = friends
+    .filter((item) => item.enabled !== false && item.isIntegrationExpert)
+    .map((item) => item.id);
+  const enabledIds = friends
+    .filter((item) => item.enabled !== false && !item.isIntegrationExpert)
+    .map((item) => item.id);
   let memberIds = Array.isArray(settings.memberIds)
     ? settings.memberIds.filter((id) => enabledIds.includes(id))
     : [...enabledIds];
@@ -127,8 +137,9 @@ function normalizeGroupSettings(settings = {}, friends = []) {
     sharedSystemPrompt: String(settings.sharedSystemPrompt || ""),
     platformFeatureEnabled: Boolean(settings.platformFeatureEnabled),
     preferredPlatform: String(settings.preferredPlatform || "gemini"),
+    synthesisEnabled: Boolean(settings.synthesisEnabled),
     synthesisFriendId:
-      memberIds.find((id) => id === settings.synthesisFriendId) || memberIds[0] || null
+      expertIds.find((id) => id === settings.synthesisFriendId) || expertIds[0] || null
   };
 }
 
@@ -173,6 +184,10 @@ async function readDb() {
   }
   if (!Array.isArray(db.conversations)) {
     db.conversations = [];
+    changed = true;
+  }
+  if (!Array.isArray(db.promptTemplates)) {
+    db.promptTemplates = [];
     changed = true;
   }
   if (changed) {
@@ -247,222 +262,49 @@ function parseBody(req) {
 function mockResponseFor(friend, prompt, language = "zh-CN") {
   return buildPromptAwareMockResponse({
     friendName: friend.name,
-    prompt,
+    modelConfigId: friend.modelConfigId,
     language,
-    platformName: friend.preferredPlatform || "",
-    platformCompany: "",
-    platformStrengths: ""
+    prompt
   });
 }
 
-async function buildMergedAnswer(prompt = "", language = "zh-CN", synthesisFriend = null, results = [], groupSettings = {}) {
-  const synthesisPrompt = buildSynthesisPromptText({ prompt, language, results });
-  const systemPrompt = language === "zh-CN"
-    ? `你负责整合多位 AI 群友的输出。请务必阅读 user_prompt 与 member_outputs，基于它们生成最终整合答案，而不是忽略群友内容重新独立作答。输出时先总结共识，再说明关键分歧，最后给出一版清晰可执行的最终回答。${buildPlatformPromptAddon(groupSettings, language)}`
-    : `You are responsible for synthesizing multiple AI friend outputs. Read user_prompt and member_outputs carefully, then generate a final synthesis instead of answering independently from scratch. Summarize consensus first, then disagreements, and finish with a clear actionable answer.${buildPlatformPromptAddon(groupSettings, language)}`;
+function getProviderIconKey(name = "", provider = "") {
+  const key = String(name || provider || "ai").toLowerCase();
+  if (key.includes("claude")) return "anthropic";
+  if (key.includes("gemini")) return "google";
+  if (key.includes("grok")) return "xai";
+  if (key.includes("chatgpt") || key.includes("openai")) return "openai";
+  if (key.includes("deepseek")) return "deepseek";
+  if (key.includes("moonshot") || key.includes("kimi")) return "moonshot";
+  if (key.includes("qwen") || key.includes("alibaba")) return "alibaba";
+  if (key.includes("hunyuan") || key.includes("tencent")) return "tencent";
+  if (key.includes("baidu") || key.includes("qianfan")) return "baidu";
+  if (key.includes("azure")) return "azure";
+  if (key.includes("mistral")) return "mistral";
+  if (key.includes("cohere")) return "cohere";
+  if (key.includes("meta") || key.includes("llama")) return "meta";
+  return "ai";
+}
 
-  if (!synthesisFriend?.apiKey || !synthesisFriend?.baseUrl) {
-    return buildFallbackSynthesis({ prompt, language, results });
+function createAIProvider(model, apiKey) {
+  const provider = String(model.provider || "").toLowerCase();
+  const baseUrl = normalizeBaseUrl(model.baseUrl);
+
+  if (provider === "anthropic") {
+    return createAnthropic({ apiKey, baseURL: baseUrl });
   }
 
-  try {
-    const provider = String(synthesisFriend.provider || "").toLowerCase();
-    if (provider.includes("anthropic") || String(synthesisFriend.name || "").toLowerCase().includes("claude")) {
-      const output = await callAnthropic(synthesisFriend, synthesisPrompt, systemPrompt);
-      return output.content || buildFallbackSynthesis({ prompt, language, results });
-    }
-    if (provider.includes("google") || String(synthesisFriend.name || "").toLowerCase().includes("gemini")) {
-      const output = await callGemini(synthesisFriend, synthesisPrompt, systemPrompt);
-      return output.content || buildFallbackSynthesis({ prompt, language, results });
-    }
-    const output = await callOpenAICompatible(synthesisFriend, synthesisPrompt, systemPrompt);
-    return output.content || buildFallbackSynthesis({ prompt, language, results });
-  } catch {
-    return buildFallbackSynthesis({ prompt, language, results });
-  }
-}
-
-function buildDisagreements(language = "zh-CN") {
-  return language === "zh-CN"
-    ? [
-        "有的群友更偏结构，有的群友更偏细节和谨慎表达。",
-        "偏验证的群友会对未经证实的说法更保守。",
-        "不同底层模型在风格、延迟和返回质量上会有明显差异。"
-      ]
-    : [
-        "Some friends optimize for structure while others optimize for nuance.",
-        "Verification-oriented friends are more conservative about unsupported claims.",
-        "Different underlying models can vary in style, latency, and output quality."
-      ];
-}
-
-function buildPlatformPromptAddon(groupSettings = {}, language = "zh-CN") {
-  if (!groupSettings.platformFeatureEnabled || !groupSettings.preferredPlatform) return "";
-  if (language === "zh-CN") {
-    return `\n\n平台路由要求：本次会话优先参考 ${groupSettings.preferredPlatform} 对应的数据生态与搜索能力，尽量体现该平台更容易触达的信息视角，并明确结论边界。`;
-  }
-  return `\n\nPlatform routing requirement: prioritize the ${groupSettings.preferredPlatform} ecosystem and reflect that platform's likely information vantage point while keeping confidence boundaries explicit.`;
-}
-
-function getPythonCommand() {
-  return process.platform === "win32" ? { command: "py", args: [] } : { command: "python3", args: [] };
-}
-
-async function aiSearchHubAvailable() {
-  try {
-    await stat(AI_SEARCH_HUB_RUNNER);
-    const { command, args } = getPythonCommand();
-    await execFile(command, args.concat(["-c", "import playwright"]), {
-      cwd: AI_SEARCH_HUB_DIR,
-      timeout: 15000,
-      windowsHide: true,
-      maxBuffer: 1024 * 256
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function runAiSearchHub(platform, prompt) {
-  if (!platform || !AI_SEARCH_PLATFORMS.has(platform)) {
-    throw new Error(`Unsupported AI Search Hub platform: ${platform}`);
-  }
-  if (!(await aiSearchHubAvailable())) {
-    throw new Error("AI Search Hub runner is not installed.");
+  if (provider === "google") {
+    return createGoogleGenerativeAI({ apiKey });
   }
 
-  const { command, args } = getPythonCommand();
-  const timestamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const outputPath = path.join(AI_SEARCH_OUTPUT_DIR, `${platform}-${timestamp}.txt`);
-  await mkdir(AI_SEARCH_OUTPUT_DIR, { recursive: true });
-
-  const runArgs = args.concat([
-    AI_SEARCH_HUB_RUNNER,
-    "--site",
-    platform,
-    "--prompt",
-    prompt,
-    "--repo-root",
-    AI_SEARCH_HUB_DIR,
-    "--output",
-    outputPath
-  ]);
-
-  await execFile(command, runArgs, {
-    cwd: AI_SEARCH_HUB_DIR,
-    timeout: 240000,
-    windowsHide: true,
-    maxBuffer: 1024 * 1024 * 4
-  });
-
-  return String(await readFile(outputPath, "utf8")).trim();
+  // Default to OpenAI-compatible (OpenAI, xAI, DeepSeek, Moonshot, etc.)
+  return createOpenAI({ apiKey, baseURL: baseUrl });
 }
 
-async function callOpenAICompatible(model, prompt, systemPrompt = "", options = {}) {
-  const messages = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  messages.push({ role: "user", content: prompt });
-  const response = await fetch(`${normalizeBaseUrl(model.baseUrl)}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${model.apiKey}`
-    },
-    body: JSON.stringify({
-      model: model.model,
-      messages,
-      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
-    })
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-  const message = data.choices?.[0]?.message || {};
-  const content =
-    typeof message.content === "string"
-      ? message.content
-      : Array.isArray(message.content)
-      ? message.content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
-      : "";
-  const thinking =
-    typeof message.reasoning_content === "string"
-      ? message.reasoning_content
-      : Array.isArray(message.reasoning_content)
-      ? message.reasoning_content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
-      : "";
-  return { content: content.trim(), thinking: thinking.trim() };
-}
+async function streamFriendResponse(friend, prompt, onChunk, options = {}) {
+  const { thinkingEnabled = false, signal, history = [] } = options;
 
-async function callAnthropic(model, prompt, systemPrompt = "", options = {}) {
-  const response = await fetch(`${normalizeBaseUrl(model.baseUrl)}/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "x-api-key": model.apiKey
-    },
-    body: JSON.stringify({
-      model: model.model,
-      max_tokens: 1200,
-      system: systemPrompt || undefined,
-      ...(options.thinkingEnabled ? { thinking: { type: "enabled", budget_tokens: 1024 } } : {}),
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-  const blocks = Array.isArray(data.content) ? data.content : [];
-  return {
-    content: blocks
-      .filter((item) => item?.type === "text")
-      .map((item) => item?.text || "")
-      .filter(Boolean)
-      .join("\n\n")
-      .trim(),
-    thinking: blocks
-      .filter((item) => item?.type === "thinking")
-      .map((item) => item?.thinking || item?.text || "")
-      .filter(Boolean)
-      .join("\n\n")
-      .trim()
-  };
-}
-
-async function callGemini(model, prompt, systemPrompt = "", options = {}) {
-  void options;
-  const response = await fetch(
-    `${normalizeBaseUrl(model.baseUrl)}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: systemPrompt ? `${systemPrompt}\n\n用户问题：${prompt}` : prompt
-              }
-            ]
-          }
-        ]
-      })
-    }
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  return {
-    content: parts.map((item) => item?.text || "").filter(Boolean).join("\n\n").trim(),
-    thinking: ""
-  };
-}
-
-async function generateFriendResponse(friend, prompt, language) {
   const model = {
     name: friend.modelConfigName || friend.name,
     provider: friend.provider,
@@ -470,12 +312,14 @@ async function generateFriendResponse(friend, prompt, language) {
     baseUrl: friend.baseUrl,
     apiKey: friend.apiKey
   };
+
   const platformLabel = friend.preferredPlatform || "";
 
   if (platformLabel) {
     try {
       const content = await runAiSearchHub(platformLabel, prompt);
       if (content) {
+        onChunk?.({ type: "content", text: content });
         return {
           friendId: friend.id,
           name: friend.name,
@@ -484,7 +328,7 @@ async function generateFriendResponse(friend, prompt, language) {
           modelConfigName: friend.modelConfigName,
           provider: friend.provider,
           model: friend.model,
-          source: language === "zh-CN" ? `AI Search Hub · ${platformLabel}` : `AI Search Hub · ${platformLabel}`,
+          source: `AI Search Hub · ${platformLabel}`,
           content,
           thinking: ""
         };
@@ -495,6 +339,8 @@ async function generateFriendResponse(friend, prompt, language) {
   }
 
   if (!model.apiKey || !model.baseUrl) {
+    const mock = mockResponseFor(friend, prompt, options.language);
+    onChunk?.({ type: "content", text: mock.content });
     return {
       friendId: friend.id,
       name: friend.name,
@@ -503,265 +349,243 @@ async function generateFriendResponse(friend, prompt, language) {
       modelConfigName: friend.modelConfigName,
       provider: friend.provider,
       model: friend.model,
-      source: platformLabel
-        ? language === "zh-CN"
-          ? `模拟结果 · ${platformLabel}`
-          : `mock · ${platformLabel}`
-        : language === "zh-CN"
-        ? "模拟结果"
-        : "mock",
-      content: mockResponseFor(friend, prompt, language),
-      thinking: "",
-      error: friend.aiSearchHubError || ""
+      source: "mock",
+      content: mock.content,
+      thinking: ""
     };
   }
+
+  const provider = createAIProvider(model, model.apiKey);
+  const systemPrompt = friend.systemPrompt || "";
+
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  if (history.length > 0) {
+    messages.push(...history);
+  }
+  messages.push({ role: "user", content: prompt });
+
+  let fullContent = "";
+  let fullThinking = "";
+  let insideThinkTag = false;
+
+  const { textStream, text, reasoning } = streamText({
+    model: provider(model.model),
+    messages,
+    ...(thinkingEnabled && model.provider === "Anthropic" ? { thinking: { type: "enabled", budgetTokens: 1024 } } : {}),
+    abortSignal: signal
+  });
+
+  for await (const chunk of textStream) {
+    // Handle <think> tags embedded in content stream
+    let remaining = chunk;
+    while (remaining.length > 0) {
+      if (insideThinkTag) {
+        const closeIdx = remaining.indexOf("</think>");
+        if (closeIdx !== -1) {
+          const thinkPart = remaining.slice(0, closeIdx);
+          if (thinkPart) {
+            fullThinking += thinkPart;
+            onChunk?.({ type: "thinking", text: thinkPart });
+          }
+          insideThinkTag = false;
+          remaining = remaining.slice(closeIdx + 8);
+        } else {
+          fullThinking += remaining;
+          onChunk?.({ type: "thinking", text: remaining });
+          remaining = "";
+        }
+      } else {
+        const openIdx = remaining.indexOf("<think>");
+        if (openIdx !== -1) {
+          const contentPart = remaining.slice(0, openIdx);
+          if (contentPart) {
+            fullContent += contentPart;
+            onChunk?.({ type: "content_delta", text: contentPart });
+          }
+          insideThinkTag = true;
+          remaining = remaining.slice(openIdx + 7);
+        } else {
+          fullContent += remaining;
+          onChunk?.({ type: "content_delta", text: remaining });
+          remaining = "";
+        }
+      }
+    }
+  }
+
+  // Wait for reasoning/thinking if available (separate field)
+  try {
+    const reasoningText = await reasoning;
+    if (reasoningText) {
+      fullThinking += (fullThinking ? "\n\n" : "") + reasoningText;
+      onChunk?.({ type: "thinking", text: reasoningText });
+    }
+  } catch {
+    // Reasoning not available for this provider
+  }
+
+  return {
+    friendId: friend.id,
+    name: friend.name,
+    avatar: friend.avatar || "",
+    modelConfigId: friend.modelConfigId,
+    modelConfigName: friend.modelConfigName,
+    provider: friend.provider,
+    model: friend.model,
+    source: model.provider,
+    content: fullContent.trim(),
+    thinking: fullThinking.trim()
+  };
+}
+
+async function generateFriendResponse(friend, prompt, language, history = []) {
+  let result = { content: "", thinking: "" };
+
+  await streamFriendResponse(friend, prompt, (chunk) => {
+    if (chunk.type === "content_delta") {
+      result.content += chunk.text;
+    } else if (chunk.type === "thinking") {
+      result.thinking = chunk.text;
+    } else if (chunk.type === "content") {
+      result.content = chunk.text;
+    }
+  }, { language, history });
+
+  return result;
+}
+
+async function runAiSearchHub(platform, prompt) {
+  const outputFile = path.join(AI_SEARCH_OUTPUT_DIR, `${Date.now()}_${Math.random().toString(36).slice(2)}.json`);
+  try {
+    await mkdir(AI_SEARCH_OUTPUT_DIR, { recursive: true });
+    await execFile("python3", [AI_SEARCH_HUB_RUNNER, platform, prompt, outputFile], {
+      timeout: 120000,
+      cwd: AI_SEARCH_HUB_DIR
+    });
+    const output = JSON.parse(await readFile(outputFile, "utf8"));
+    return output?.content || output?.text || "";
+  } catch {
+    return "";
+  }
+}
+
+async function buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings) {
+  const provider = String(synthesisFriend?.provider || "").toLowerCase();
+
+  if (!synthesisFriend || !synthesisFriend.apiKey || !synthesisFriend.baseUrl) {
+    return buildFallbackSynthesis({ results, prompt, language });
+  }
+
+  const synthesisPrompt = buildSynthesisPromptText({ prompt, results, language });
 
   try {
-    const provider = String(model.provider || "").toLowerCase();
-    let output = { content: "", thinking: "" };
-    if (provider.includes("anthropic") || model.name.toLowerCase().includes("claude")) {
-      output = await callAnthropic(model, prompt, friend.systemPrompt || "", {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
-      });
-    } else if (provider.includes("google") || model.name.toLowerCase().includes("gemini")) {
-      output = await callGemini(model, prompt, friend.systemPrompt || "", {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
-      });
-    } else {
-      output = await callOpenAICompatible(model, prompt, friend.systemPrompt || "", {
-        thinkingEnabled: Boolean(friend.thinkingEnabled)
-      });
-    }
+    const aiProvider = createAIProvider(synthesisFriend, synthesisFriend.apiKey);
+    const systemPrompt = synthesisFriend.systemPrompt || getDefaultSynthesisSystemPrompt(language);
 
-    return {
-      friendId: friend.id,
-      name: friend.name,
-      avatar: friend.avatar || "",
-      modelConfigId: friend.modelConfigId,
-      modelConfigName: friend.modelConfigName,
-      provider: friend.provider,
-      model: friend.model,
-      source: platformLabel
-        ? language === "zh-CN"
-          ? `实时结果 · ${platformLabel}`
-          : `live · ${platformLabel}`
-        : language === "zh-CN"
-        ? "实时结果"
-        : "live",
-      content: output.content || mockResponseFor(friend, prompt, language),
-      thinking: friend.thinkingEnabled ? output.thinking || "" : ""
-    };
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: synthesisPrompt });
+
+    const { text } = await generateText({
+      model: aiProvider(synthesisFriend.model),
+      messages
+    });
+
+    return text.trim() || buildFallbackSynthesis({ results, prompt, language });
   } catch (error) {
-    return {
-      friendId: friend.id,
-      name: friend.name,
-      avatar: friend.avatar || "",
-      modelConfigId: friend.modelConfigId,
-      modelConfigName: friend.modelConfigName,
-      provider: friend.provider,
-      model: friend.model,
-      source: platformLabel
-        ? language === "zh-CN"
-          ? `回退结果 · ${platformLabel}`
-          : `fallback · ${platformLabel}`
-        : language === "zh-CN"
-        ? "回退结果"
-        : "fallback",
-      content: mockResponseFor(friend, prompt, language),
-      thinking: "",
-      error: error.message
-    };
+    console.warn("Synthesis failed:", error.message);
+    return buildFallbackSynthesis({ results, prompt, language });
   }
 }
 
-function resolveRunPayload(body = {}, db = {}) {
-  const prompt = String(body.prompt || "").trim();
-  const language = body.language === "en" ? "en" : "zh-CN";
-  const models = Array.isArray(body.models) && body.models.length ? body.models : db.models || cloneDefaultModels();
-  const friends =
-    Array.isArray(body.friends) && body.friends.length
-      ? body.friends
-      : Array.isArray(body.models)
-      ? body.models
-          .filter((item) => item.enabled)
-          .map((model) => ({
-            id: `legacy-${model.id || model.name}`,
-            name: model.name,
-            avatar: model.avatar || "",
-            modelConfigId: model.id || model.name,
-            modelConfigName: model.name,
-            provider: model.provider,
-            model: model.model,
-            baseUrl: model.baseUrl,
-            apiKey: model.apiKey,
-            systemPrompt: "",
-            enabled: true
-          }))
-      : [];
+function buildDisagreements(language = "zh-CN") {
+  return language === "zh-CN"
+    ? [{ axis: "示例", points: ["这是一个示例分歧点，用于展示各模型的不同视角。"] }]
+    : [{ axis: "Example", points: ["This is a sample disagreement to show different model perspectives."] }];
+}
 
-  const normalizedFriends = friends
-    .filter((item) => item.enabled !== false)
-    .map((friend) => {
-      const boundModel =
-        models.find((model) => model.id === friend.modelConfigId) ||
-        models.find((model) => model.name === friend.modelConfigName) ||
-        null;
-      return {
-        id: friend.id,
-        name: friend.name,
-        avatar: friend.avatar || boundModel?.avatar || "",
-        modelConfigId: friend.modelConfigId || boundModel?.id || "",
-        modelConfigName: friend.modelConfigName || boundModel?.name || "",
-        provider: friend.provider || boundModel?.provider || "",
-        model: friend.model || boundModel?.model || "",
-        baseUrl: friend.baseUrl || boundModel?.baseUrl || "",
-        apiKey: friend.apiKey || boundModel?.apiKey || "",
-        systemPrompt: String(friend.systemPrompt || ""),
-        enabled: true
-      };
-    })
-    .filter((friend) => friend.modelConfigName);
-
-  const groupSettings = normalizeGroupSettings(
-    body.groupSettings || createDefaultGroupSettings(normalizedFriends),
-    normalizedFriends
-  );
-  const runFriends = groupSettings.memberIds
-    .map((id) => normalizedFriends.find((friend) => friend.id === id))
-    .filter(Boolean)
-    .map((friend) => ({
-      ...friend,
-      preferredPlatform: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform : "",
-      thinkingEnabled: Boolean(friend.thinkingEnabled),
-      systemPrompt: groupSettings.sharedSystemPromptEnabled
-        ? `${String(groupSettings.sharedSystemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
-        : `${String(friend.systemPrompt || "")}${buildPlatformPromptAddon(groupSettings, language)}`.trim()
-    }));
-
-  const synthesisFriend =
-    runFriends.find((item) => item.id === groupSettings.synthesisFriendId) || runFriends[0] || null;
-
+function buildConversationRecord({ prompt, language, friends, groupSettings, results, mergedAnswer, disagreements }) {
+  const createdAt = new Date().toISOString();
   return {
+    id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     prompt,
     language,
-    models,
-    allFriends: normalizedFriends,
-    friends: runFriends,
-    groupSettings,
-    synthesisFriend
+    createdAt,
+    updatedAt: createdAt,
+    friends: friends.map((f) => ({
+      id: f.id,
+      name: f.name,
+      avatar: f.avatar || "",
+      modelConfigId: f.modelConfigId,
+      modelConfigName: f.modelConfigName,
+      provider: f.provider,
+      model: f.model
+    })),
+    groupSettings: {
+      memberIds: [...groupSettings.memberIds],
+      synthesisFriendId: groupSettings.synthesisFriendId,
+      sharedSystemPromptEnabled: groupSettings.sharedSystemPromptEnabled
+    },
+    responses: results.map((r) => ({
+      friendId: r.friendId,
+      name: r.name,
+      avatar: r.avatar || "",
+      provider: r.provider,
+      model: r.model,
+      content: r.content,
+      thinking: r.thinking,
+      source: r.source || ""
+    })),
+    mergedAnswer,
+    disagreements
   };
 }
 
-function buildConversationRecord({
-  prompt,
-  language,
-  friends,
-  groupSettings,
-  results,
-  mergedAnswer,
-  disagreements
-}) {
-  const now = new Date().toISOString();
-  const synthesisFriend = friends.find((item) => item.id === groupSettings.synthesisFriendId) || friends[0] || null;
-  return {
-    id: `conv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    title: prompt,
-    prompt,
-    friendIds: friends.map((item) => item.id),
-    models: friends.map((item) => item.modelConfigName || item.name),
-    synthesisFriendId: synthesisFriend?.id || null,
-    synthesisModel: synthesisFriend?.name || "",
-    preferredPlatformId: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform || "" : "",
-    preferredPlatformName: groupSettings.platformFeatureEnabled ? groupSettings.preferredPlatform || "" : "",
-    runtimeMode: "backend",
-    createdAt: now,
-    updatedAt: now,
-    timestamp: new Date(now).toLocaleString(language === "zh-CN" ? "zh-CN" : "en-US"),
-    responses: results,
-    mergedAnswer,
-    disagreements,
-    friendsSnapshot: friends.map((item) => ({
-      id: item.id,
-      name: item.name,
-      avatar: item.avatar || "",
-      modelConfigId: item.modelConfigId,
-      modelConfigName: item.modelConfigName,
-      provider: item.provider,
-      model: item.model,
-      thinkingEnabled: Boolean(item.thinkingEnabled),
-      systemPrompt: item.systemPrompt || "",
-      enabled: true,
-      description: ""
-    })),
-    groupSettingsSnapshot: {
-      memberIds: [...groupSettings.memberIds],
-      sharedSystemPromptEnabled: Boolean(groupSettings.sharedSystemPromptEnabled),
-      sharedSystemPrompt: String(groupSettings.sharedSystemPrompt || ""),
-      platformFeatureEnabled: Boolean(groupSettings.platformFeatureEnabled),
-      preferredPlatform: String(groupSettings.preferredPlatform || "gemini"),
-      synthesisFriendId: groupSettings.synthesisFriendId || null
-    },
-    messages: [
-      {
-        role: "user",
-        kind: "user",
-        content: prompt,
-        createdAt: now
-      },
-      ...results.map((item) => ({
-        role: "assistant",
-        kind: "model",
-        friendId: item.friendId,
-        name: item.name,
-        avatar: item.avatar || "",
-        modelConfigId: item.modelConfigId,
-        modelConfigName: item.modelConfigName,
-        provider: item.provider,
-      model: item.model,
-      thinkingEnabled: Boolean(item.thinkingEnabled),
-      source: item.source,
-      content: item.content,
-        thinking: item.thinking || "",
-        createdAt: now,
-        error: item.error || ""
-      })),
-      {
-        role: "assistant",
-        kind: "synthesis",
-        friendId: synthesisFriend?.id || "",
-        name: `${synthesisFriend?.name || "AI"} ${language === "zh-CN" ? "整合" : "synthesis"}`,
-        avatar: synthesisFriend?.avatar || "",
-        modelConfigId: synthesisFriend?.modelConfigId || "",
-        modelConfigName: synthesisFriend?.modelConfigName || "",
-        provider: synthesisFriend?.provider || "",
-        model: synthesisFriend?.model || "",
-        content: mergedAnswer,
-        createdAt: now
-      }
-    ]
-  };
+function resolveRunPayload(body, db) {
+  const prompt = String(body.prompt || "").trim();
+  const language = String(body.language || body.lang || "zh-CN");
+  const groupSettings = normalizeGroupSettings(body.groupSettings, db.friends);
+
+  const enabledFriends = db.friends.filter((f) => f.enabled !== false);
+  const memberIds = groupSettings.memberIds.filter((id) => enabledFriends.some((f) => f.id === id));
+
+  let friends = enabledFriends.filter((f) => memberIds.includes(f.id));
+  let synthesisFriend = groupSettings.synthesisEnabled
+    ? (db.friends.find((f) => f.id === groupSettings.synthesisFriendId && f.isIntegrationExpert) || null)
+    : null;
+
+  // Exclude synthesis friend from regular friends — it only produces the synthesis output.
+  // If synthesis friend is the only member, skip synthesis and run it as a regular friend.
+  if (synthesisFriend) {
+    const otherFriends = friends.filter((f) => f.id !== synthesisFriend.id);
+    if (otherFriends.length > 0) {
+      friends = otherFriends;
+    } else {
+      synthesisFriend = null;
+    }
+  }
+
+  const conversationHistory = Array.isArray(body.conversationHistory) ? body.conversationHistory : [];
+
+  return { prompt, language, friends, groupSettings, synthesisFriend, conversationHistory };
 }
 
 async function handleApi(req, res, url) {
-  if (req.method === "OPTIONS") {
-    sendJson(res, 200, { ok: true });
-    return true;
-  }
-
   if (url.pathname === "/api/account" && req.method === "GET") {
     const db = await readDb();
-    sendJson(res, 200, { account: db.account });
+    sendJson(res, 200, { account: db.account || null });
     return true;
   }
 
   if (url.pathname === "/api/auth/register" && req.method === "POST") {
     const body = await parseBody(req);
-    if (!body.email || !body.name) {
-      sendJson(res, 400, { error: "Email and workspace name are required." });
-      return true;
-    }
     const db = await readDb();
-    db.account = { email: body.email, name: body.name };
+    db.account = { email: body.email || "", workspace: body.workspace || "" };
     await writeDb(db);
     sendJson(res, 200, { account: db.account });
     return true;
@@ -769,46 +593,16 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/models" && req.method === "GET") {
     const db = await readDb();
-    sendJson(res, 200, { models: db.models });
+    sendJson(res, 200, { models: db.models || [] });
     return true;
   }
 
   if (url.pathname === "/api/models" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.models = Array.isArray(body.models) && body.models.length ? body.models : cloneDefaultModels();
+    db.models = Array.isArray(body.models) ? body.models : db.models;
     await writeDb(db);
     sendJson(res, 200, { models: db.models });
-    return true;
-  }
-
-  if (url.pathname === "/api/models/test" && req.method === "POST") {
-    const body = await parseBody(req);
-    const model = body.model || {};
-    const language = body.language || "zh-CN";
-    if (!model.baseUrl || !model.apiKey) {
-      sendJson(res, 400, { ok: false, message: "Missing Base URL or API key" });
-      return true;
-    }
-
-    try {
-      const provider = String(model.provider || "").toLowerCase();
-      const prompt = language === "zh-CN" ? "请只回复：连接测试成功" : "Reply with: connection test ok";
-      let output = { content: "", thinking: "" };
-      if (provider.includes("anthropic") || String(model.name || "").toLowerCase().includes("claude")) {
-        output = await callAnthropic(model, prompt, "");
-      } else if (provider.includes("google") || String(model.name || "").toLowerCase().includes("gemini")) {
-        output = await callGemini(model, prompt, "");
-      } else {
-        output = await callOpenAICompatible(model, prompt, "");
-      }
-      sendJson(res, 200, {
-        ok: true,
-        message: output.content || (language === "zh-CN" ? "连接测试成功" : "Connection successful")
-      });
-    } catch (error) {
-      sendJson(res, 500, { ok: false, message: error.message });
-    }
     return true;
   }
 
@@ -821,7 +615,8 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/friends" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.friends = Array.isArray(body.friends) ? body.friends : db.friends || [];
+    db.friends = Array.isArray(body.friends) ? body.friends : db.friends;
+    db.groupSettings = normalizeGroupSettings(db.groupSettings, db.friends);
     await writeDb(db);
     sendJson(res, 200, { friends: db.friends });
     return true;
@@ -829,30 +624,47 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/group-settings" && req.method === "GET") {
     const db = await readDb();
-    sendJson(res, 200, { groupSettings: db.groupSettings || createDefaultGroupSettings(db.friends || []) });
+    sendJson(res, 200, { groupSettings: normalizeGroupSettings(db.groupSettings, db.friends) });
     return true;
   }
 
   if (url.pathname === "/api/group-settings" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.groupSettings = normalizeGroupSettings(body.groupSettings || {}, db.friends || []);
+    db.groupSettings = normalizeGroupSettings(body.groupSettings, db.friends);
     await writeDb(db);
     sendJson(res, 200, { groupSettings: db.groupSettings });
     return true;
   }
 
+  if (url.pathname === "/api/prompt-templates" && req.method === "GET") {
+    const db = await readDb();
+    sendJson(res, 200, { promptTemplates: db.promptTemplates || [] });
+    return true;
+  }
+
+  if (url.pathname === "/api/prompt-templates" && req.method === "POST") {
+    const body = await parseBody(req);
+    const db = await readDb();
+    db.promptTemplates = Array.isArray(body.promptTemplates) ? body.promptTemplates : (db.promptTemplates || []);
+    await writeDb(db);
+    sendJson(res, 200, { promptTemplates: db.promptTemplates });
+    return true;
+  }
+
   if (url.pathname === "/api/conversations" && req.method === "GET") {
     const db = await readDb();
-    sendJson(res, 200, { conversations: db.conversations });
+    sendJson(res, 200, { conversations: db.conversations || [] });
     return true;
   }
 
   if (url.pathname === "/api/conversations" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    db.conversations = Array.isArray(body.conversations) ? body.conversations.slice(0, 50) : db.conversations;
-    await writeDb(db);
+    if (body.conversations) {
+      db.conversations = Array.isArray(body.conversations) ? body.conversations : db.conversations;
+      await writeDb(db);
+    }
     sendJson(res, 200, { conversations: db.conversations });
     return true;
   }
@@ -860,15 +672,22 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/chat/run" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    const { prompt, language, friends, groupSettings, synthesisFriend } = resolveRunPayload(body, db);
+    const { prompt, language, friends, groupSettings, synthesisFriend, conversationHistory } = resolveRunPayload(body, db);
     if (!prompt || friends.length === 0) {
       sendJson(res, 400, { error: "Need prompt and at least one selected friend." });
       return true;
     }
 
-    const results = await Promise.all(friends.map((friend) => generateFriendResponse(friend, prompt, language)));
-    const mergedAnswer = await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings);
-    const disagreements = buildDisagreements(language);
+    const results = await Promise.all(friends.map((friend) => {
+      const friendHistory = conversationHistory
+        .filter((msg) => msg.kind === "user" || ((msg.kind === "model" || msg.kind === "synthesis") && msg.friendId === friend.id))
+        .map((msg) => ({ role: msg.role === "user" ? "user" : "assistant", content: msg.content }));
+      return generateFriendResponse(friend, prompt, language, friendHistory);
+    }));
+    const mergedAnswer = synthesisFriend
+      ? await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings)
+      : "";
+    const disagreements = synthesisFriend ? buildDisagreements(language) : [];
     const conversation = buildConversationRecord({
       prompt,
       language,
@@ -890,17 +709,26 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/chat/run/stream" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();
-    const { prompt, language, friends, groupSettings, synthesisFriend } = resolveRunPayload(body, db);
+    const { prompt, language, friends, groupSettings, synthesisFriend, conversationHistory } = resolveRunPayload(body, db);
     if (!prompt || friends.length === 0) {
       sendJson(res, 400, { error: "Need prompt and at least one selected friend." });
       return true;
     }
+
+    const controller = new AbortController();
+    req.on("close", () => controller.abort());
+    req.on("error", () => controller.abort());
 
     sendNdjsonHeaders(res);
     writeNdjson(res, { type: "start", prompt, synthesisFriendId: groupSettings.synthesisFriendId });
 
     const results = [];
     for (const friend of friends) {
+      // Extract per-friend history: user messages + this friend's responses
+      const friendHistory = conversationHistory
+        .filter((msg) => msg.kind === "user" || ((msg.kind === "model" || msg.kind === "synthesis") && msg.friendId === friend.id))
+        .map((msg) => ({ role: msg.role === "user" ? "user" : "assistant", content: msg.content }));
+
       writeNdjson(res, {
         type: "friend_start",
         friend: {
@@ -913,18 +741,36 @@ async function handleApi(req, res, url) {
           model: friend.model
         }
       });
-      const result = await generateFriendResponse(friend, prompt, language);
+
+      const result = await streamFriendResponse(
+        friend,
+        prompt,
+        (chunk) => {
+          if (chunk.type === "content_delta") {
+            writeNdjson(res, { type: "friend_content_delta", friendId: friend.id, delta: chunk.text });
+          } else if (chunk.type === "thinking") {
+            // Stream thinking/reasoning content
+            writeNdjson(res, { type: "friend_thinking_delta", friendId: friend.id, delta: chunk.text });
+          }
+        },
+        { language, thinkingEnabled: friend.thinkingEnabled, signal: controller.signal, history: friendHistory }
+      );
+
       if (result.thinking) {
-        await streamChunks(res, { type: "friend_thinking_delta", friendId: friend.id }, result.thinking);
+        writeNdjson(res, { type: "friend_thinking_complete", friendId: friend.id, thinking: result.thinking });
       }
-      await streamChunks(res, { type: "friend_content_delta", friendId: friend.id }, result.content);
       writeNdjson(res, { type: "friend_done", friendId: friend.id, source: result.source || "" });
       results.push(result);
     }
 
-    const mergedAnswer = await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings);
-    const disagreements = buildDisagreements(language);
-    await streamChunks(res, { type: "synthesis_delta", friendId: groupSettings.synthesisFriendId }, mergedAnswer);
+    const mergedAnswer = synthesisFriend
+      ? await buildMergedAnswer(prompt, language, synthesisFriend, results, groupSettings)
+      : "";
+    const disagreements = synthesisFriend ? buildDisagreements(language) : [];
+
+    if (synthesisFriend && mergedAnswer) {
+      await streamChunks(res, { type: "synthesis_delta", friendId: groupSettings.synthesisFriendId }, mergedAnswer);
+    }
 
     const conversation = buildConversationRecord({
       prompt,
@@ -972,5 +818,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, async () => {
   await ensureDb();
-  console.log(`OpenChat server running at http://127.0.0.1:${PORT}`);
+  console.log(`OpenChat server running at http://1270.0.1:${PORT}`);
 });

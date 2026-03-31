@@ -8,8 +8,11 @@ server.err
 workspace-home.png
 *.log
 public/
-.playwright-cli/
 .worktrees/
 .worktrees/**
 docs/superpowers/
 openchat.local-models.json
+nodemoduls/
+config.toml
+.cc-connect/
+*~HEAD

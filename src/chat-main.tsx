@@ -3,6 +3,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ChatWorkspace } from './components/chat/ChatWorkspace';
 
+let chatRoot: ReturnType<typeof createRoot> | null = null;
+
 function mountChat() {
   const container = document.getElementById('chat-root');
   if (!container) {
@@ -10,8 +12,13 @@ function mountChat() {
     return;
   }
 
-  const root = createRoot(container);
-  root.render(
+  // Prevent double-mount: reuse existing root
+  if (chatRoot) {
+    return;
+  }
+
+  chatRoot = createRoot(container);
+  chatRoot.render(
     <React.StrictMode>
       <ChatWorkspace />
     </React.StrictMode>
@@ -21,9 +28,3 @@ function mountChat() {
 }
 
 export { mountChat };
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mountChat);
-} else {
-  mountChat();
-}

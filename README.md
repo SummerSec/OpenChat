@@ -2,191 +2,154 @@
 
 [English](./README_en.md)
 
-## 中文说明
+OpenChat 是一个开源的多模型 AI 群聊工作区。将同一条消息同时发送给多个 AI 群友，在统一界面中对比各模型回答，并由 AI 整合专家生成综合回复。
 
-OpenChat 是一个多模型 AI 工作区，可以让同一个提示词同时交给多个 AI 朋友回答，在共享聊天界面中对比结果，并生成一条综合回复。
+## 特性
 
-### 概览
+- **多模型群聊** — 一条消息同时发送给多个 AI 群友，实时流式显示各自回答
+- **AI 整合专家** — 指定一位群友作为整合专家，自动汇总所有回答并生成综合结论
+- **仅与专家对话** — 启用后跳过普通群友，仅与整合专家直接对话，支持多轮上下文
+- **Markdown 渲染** — 基于 Streamdown 的实时 Markdown 渲染，支持代码高亮、数学公式、Mermaid 图表、CJK 优化
+- **思维链折叠** — 自动识别 `<think>` 标签和 `reasoning_content`，流式展开/完成后折叠
+- **复制按钮** — 所有群友消息生成完成后均可一键复制
+- **多轮对话** — 每位群友独立维护对话历史，支持连续追问
+- **群组管理** — 自由选择参与当前会话的群友组合，支持共享系统提示词
+- **会话历史** — 保存、重命名、置顶、分享、删除历史会话
+- **双语界面** — 中文 / 英文切换
+- **双运行模式** — 纯前端模式（localStorage）或后端模式（Node.js 服务端持久化）
+- **前端密码门** — 可选的 MD5 密码保护，适用于公网部署
+- **Mock 回退** — 未配置 API Key 时自动使用模拟响应，保持界面可用
 
-- 支持两种运行模式：`frontend` 和 `backend`
-- `frontend` 模式为纯浏览器运行，状态存储在 `localStorage`
-- `backend` 模式使用 Node.js 服务端持久化，并提供 `/api/*` 路由
-- 同一套多页面 UI 可在两种模式之间切换使用
+## 技术栈
 
-### 功能
+| 层 | 技术 |
+|---|------|
+| 前端框架 | Vanilla JS + React 19（混合渲染） |
+| 样式 | Tailwind CSS v4 |
+| 组件库 | shadcn/ui + AI Elements |
+| 状态管理 | Zustand |
+| 构建工具 | Vite |
+| 后端 | Node.js（原生 HTTP，无框架） |
+| AI SDK | Vercel AI SDK |
+| Markdown | Streamdown（流式渲染） |
+| 测试 | Node 内置测试运行器 |
 
-- 在同一会话中让多个 AI 朋友同时响应一个提示词
-- 为每个朋友绑定模型配置、头像和独立系统提示词
-- 选择哪些朋友参与当前会话
-- 选择一个综合朋友输出最终合并回复
-- 为当前会话配置共享系统提示词
-- 通过后端以增量方式流式返回响应
-- 保存、重命名、置顶、分享和删除历史会话
-- 在中文和英文界面之间切换
-- 使用浏览器本地存储或后端 JSON 持久化
-- 在提供商未完整配置时回退到 mock 响应，保持界面可用
+## 快速开始
 
-### 页面
-
-- `index.html` - 主工作区和多朋友聊天界面
-- `settings.html` - 模型路由、提供商设置、运行模式
-- `friends.html` - AI 朋友管理
-- `auth.html` - 本地账号注册入口
-- `history.html` - 历史会话列表
-
-### 快速开始
-
-安装依赖：
+### 安装依赖
 
 ```bash
 npm install
 ```
 
-前端开发模式：
+### 前端开发模式
 
 ```bash
 npm run dev
 ```
 
-启动后端服务：
+浏览器访问 `http://127.0.0.1:4173`
 
-```bash
-npm run start
-```
-
-后端开发模式：
+### 后端开发模式
 
 ```bash
 npm run dev:server
 ```
 
-默认端口：
+浏览器访问 `http://127.0.0.1:8787`
 
-- Vite 前端：`http://127.0.0.1:4173`
-- Node 后端：`http://127.0.0.1:8787`
-
-### 前端密码门
-
-`frontend` 模式可以在页面可用前增加一个全局密码校验。
-
-- 密码以 `MD5` 进行比对
-- 解锁状态保存在 `localStorage`，同一浏览器中可长期生效
-- `backend` 模式不受这层仅前端使用的密码门限制
-
-配置优先级：
-
-1. `VITE_FRONTEND_PASSWORD_MD5` 环境变量
-2. `public/frontend-auth.json`
-
-托管前端构建，例如 Vercel：
-
-```bash
-VITE_FRONTEND_PASSWORD_MD5=<your-md5-hash>
-```
-
-创建或编辑 `public/frontend-auth.json`：
-
-```json
-{
-  "frontendPasswordMd5": "<md5-hash>"
-}
-```
-
-使用 Node 生成 MD5 哈希：
-
-```bash
-node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
-```
-
-**不要提交你正在实际使用的真实密码哈希。**
-
-### 本地引导
-
-`frontend` 模式首次使用时，如果浏览器的 `localStorage` 中还没有模型配置，会自动加载 `public/openchat.local-models.json`。
-
-- 该文件用于本地初始化和演示环境引导
-- 浏览器中已保存的模型配置不会被覆盖
-- 如果需要重新应用该文件，清除 `localStorage` 中保存的模型配置键即可
-
-当前本地引导文件：
-
-- `public/openchat.local-models.json`
-
-对于 OpenAI-compatible 网关，建议填写完整 API base path，通常以 `/v1` 结尾。
-
-### 构建与测试
-
-构建：
+### 构建
 
 ```bash
 npm run build
 npm run preview
 ```
 
-运行完整测试：
+### 运行测试
 
 ```bash
+# 完整测试套件
 npm test
-```
 
-运行单个测试文件：
-
-```bash
+# 单个测试文件
 node --test src/__tests__/frontend-auth.test.mjs
-```
 
-按名称筛选测试：
-
-```bash
+# 按名称筛选
 node --test --test-name-pattern="frontend password" src/__tests__/frontend-auth.test.mjs
 ```
 
-### 架构
+## 页面结构
 
-#### `frontend` 模式
+| 页面 | 路径 | 说明 |
+|------|------|------|
+| 主工作区 | `index.html` | 多群友聊天界面、消息发送、综合回复 |
+| 模型设置 | `settings.html` | 模型提供商、API Key、Base URL、运行模式 |
+| 群友管理 | `friends.html` | 添加/编辑 AI 群友、绑定模型、设置系统提示词 |
+| 账号注册 | `auth.html` | 本地账号注册入口 |
+| 历史会话 | `history.html` | 会话记录浏览与管理 |
 
-- 在 `localStorage` 中保存账号、模型、朋友、群组设置和历史会话
-- 未配置真实端点时可使用 mock 响应
-- 与 `backend` 模式共享同一套页面结构和交互模型
+## 架构
 
-#### `backend` 模式
+### 运行模式
 
-- 由 `server.mjs` 提供静态文件和 `/api/*` 路由
+**前端模式（Frontend）**
+
+- 纯浏览器运行，所有状态存储在 `localStorage`
+- API 请求直接从浏览器发往各模型提供商
+- 适合个人使用或静态部署
+
+**后端模式（Backend）**
+
+- Node.js 服务端提供 `/api/*` 路由和静态文件服务
 - 数据持久化到 `.data/openchat-db.json`
-- 通过换行分隔 JSON 流传输运行结果
-- 在服务端保存账号、模型、朋友、默认群组设置和会话数据
+- 通过 NDJSON 流式传输响应
+- API Key 在服务端管理，更安全
 
-#### 核心文件
+### 核心文件
 
-- `src/script.js` - 前端应用逻辑、i18n、渲染、运行模式切换、状态同步
-- `src/styles.css` - 全部应用样式
-- `server.mjs` - 自包含的 Node HTTP 服务与提供商适配层
-- `vite.config.js` - Vite 配置
+| 文件 | 职责 |
+|------|------|
+| `src/script.js` | 前端主逻辑：i18n、渲染、状态管理、运行模式切换 |
+| `src/styles.css` | 全部样式 |
+| `server.mjs` | Node HTTP 服务器、API 路由、提供商适配器 |
+| `vite.config.js` | Vite 构建配置 |
+| `src/stores/chatStore.ts` | Zustand 状态管理（React 层） |
+| `src/chat-main.tsx` | React 聊天组件挂载入口 |
+| `src/components/chat/` | React 聊天组件（FriendChatCard、SynthesisCard 等） |
+| `src/components/ai-elements/` | AI Elements 组件（Message、Reasoning、PromptInput 等） |
 
-### 后端 API
+### 提供商适配器
 
-当前后端暴露以下接口：
+后端内置三种 API 适配器：
 
-- `GET /api/account`
-- `POST /api/auth/register`
-- `GET /api/models`
-- `POST /api/models`
-- `GET /api/friends`
-- `POST /api/friends`
-- `GET /api/group-settings`
-- `POST /api/group-settings`
-- `GET /api/conversations`
-- `POST /api/conversations`
-- `POST /api/chat/run`
-- `POST /api/chat/run/stream`
+| 适配器 | 适用提供商 |
+|--------|-----------|
+| `callOpenAICompatible` | OpenAI、xAI、Kimi、DeepSeek 及所有 OpenAI 兼容端点 |
+| `callAnthropic` | Anthropic Claude |
+| `callGemini` | Google Gemini |
 
-### 数据存储
+前端模式下同样支持上述提供商的直接调用，并对 OpenAI 兼容端点提供流式输出。
 
-后端持久化文件位置：
+## 后端 API
 
-- `.data/openchat-db.json`
+```
+GET  /api/account              # 获取账号信息
+POST /api/auth/register         # 注册账号
+GET  /api/models                # 获取模型配置列表
+POST /api/models                # 保存模型配置
+GET  /api/friends               # 获取群友列表
+POST /api/friends               # 保存群友列表
+GET  /api/group-settings        # 获取群组设置
+POST /api/group-settings        # 保存群组设置
+GET  /api/conversations         # 获取历史会话
+POST /api/conversations         # 保存历史会话
+POST /api/chat/run              # 非流式运行
+POST /api/chat/run/stream       # 流式运行（NDJSON）
+```
 
-存储结构示例：
+## 数据存储
+
+后端数据文件：`.data/openchat-db.json`
 
 ```json
 {
@@ -198,26 +161,67 @@ node --test --test-name-pattern="frontend password" src/__tests__/frontend-auth.
 }
 ```
 
-历史会话最多保留最近 50 条。
+历史会话上限为最近 50 条。
 
-### 部署
+## 配置
 
-静态前端输出：
+### 前端密码门
 
-- Vercel：使用 `npm run build`，输出目录为 `dist`
-- Cloudflare Pages：使用 `npm run build`，输出目录为 `dist`
+`frontend` 模式下可启用密码保护。配置优先级：
 
-Node 后端：
+1. 环境变量 `VITE_FRONTEND_PASSWORD_MD5`
+2. `public/frontend-auth.json`
 
-- 运行 `node server.mjs`
-- 如果希望直接使用 `/api/*` 路由而不额外配置代理，前后端应部署在同一 origin 下
+```json
+{
+  "frontendPasswordMd5": "<md5-hash>"
+}
+```
 
-### 说明
+生成 MD5 哈希：
 
-- 自动化测试使用 Node 内置测试运行器，测试文件位于 `src/__tests__/` 目录
-- 当前后端使用 JSON 文件持久化，定位为轻量级 MVP
-- 后端内置适配器覆盖 OpenAI-compatible APIs、Anthropic 和 Gemini
-- 在 `backend` 模式下，历史编辑会通过 `POST /api/conversations` 回写到服务端
-- 如果后端加载失败，界面会回退到 `frontend` 模式以保持本地状态可用
-- `vendor/ai-search-hub` 可作为可选后端桥接接入 AI Search Hub
-- 若要启用真实平台执行，需要在本地 `py` 环境中安装 Python Playwright，并确保目标平台站点可访问且已登录
+```bash
+node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
+```
+
+### 本地模型引导
+
+首次使用 `frontend` 模式时，如果 `localStorage` 中无模型配置，会自动加载 `public/openchat.local-models.json`。
+
+- 该文件仅用于本地引导和演示
+- 仓库中应保持空占位（`{"models":[]}`），不要提交真实 API Key
+- 已有的浏览器模型配置不会被覆盖
+- 对于 OpenAI 兼容网关，Base URL 通常以 `/v1` 结尾
+
+## 部署
+
+### 静态前端部署
+
+适用于 Vercel、Cloudflare Pages 等：
+
+```bash
+npm run build
+# 输出目录：dist
+```
+
+### 后端部署
+
+```bash
+node server.mjs
+# 默认端口：8787
+```
+
+前后端部署在同一 origin 下可直接使用 `/api/*` 路由，无需额外代理。
+
+## 补充说明
+
+- 测试文件位于 `src/__tests/` 和 `features/` 目录，使用 Node 内置测试运行器
+- 后端使用 JSON 文件持久化，适合轻量级场景
+- 后端模式下的历史编辑会通过 `POST /api/conversations` 同步回服务端
+- 后端加载失败时界面自动回退到前端模式，保持本地状态可用
+- `vendor/ai-search-hub` 可作为可选后端桥接 AI Search Hub
+- 平台执行功能需要本地安装 Python Playwright 并确保目标站点可访问
+
+## 许可证
+
+MIT

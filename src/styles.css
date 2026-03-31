@@ -1,6 +1,37 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4 — utilities only (skip preflight to preserve existing styles) */
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
+/* Streamdown generates HTML with Tailwind classes at runtime;
+   safelist file declares them so Tailwind includes the utilities. */
+@source "./streamdown-safelist.html";
+
+/* Map existing shadcn/ui HSL variables → Tailwind v4 color tokens */
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--background));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
 
 /* =====================================================
    THEMING SYSTEM - CSS Variables based
@@ -1121,6 +1152,48 @@ a {
   line-height: 1.5;
 }
 
+.prompt-template-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt-template-row .inline-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-template-save-btn,
+.prompt-template-delete-btn {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+
+.config-card-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.friend-expert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text);
+  user-select: none;
+}
+
+.friend-expert-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 .config-card-actions {
   display: flex;
   justify-content: flex-end;
@@ -1943,37 +2016,9 @@ body.frontend-access-locked #frontend-password-modal {
   min-width: 220px;
 }
 
-.workspace-strip-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 20px;
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.workspace-strip-actions > * {
-  flex: 0 0 auto;
-}
-
-#group-settings-toggle,
-#reroll-synthesis {
-  min-width: 110px;
-}
-
 #group-settings-toggle {
+  min-width: 110px;
   font-size: 0.84rem;
-}
-
-#synth-model {
-  width: clamp(150px, 18vw, 210px);
-  max-width: 100%;
 }
 
 .workspace-stage-copy {
@@ -2166,6 +2211,14 @@ body.frontend-access-locked #frontend-password-modal {
   line-height: 1.74;
 }
 
+/* ── React ChatWorkspace inline layout ── */
+.chat-workspace-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
 .message-row {
   width: 100%;
   max-width: var(--message-list-max-width);
@@ -2279,9 +2332,70 @@ body.frontend-access-locked #frontend-password-modal {
   padding: 16px 18px;
 }
 
+/* Table styles for message bubbles */
+.ai-bubble-content table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+  margin: 0.6em 0;
+  font-size: 0.93em;
+}
+
+.ai-bubble-content th,
+.ai-bubble-content td {
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+}
+
+.ai-bubble-content th {
+  background: rgba(0, 0, 0, 0.03);
+  font-weight: 700;
+}
+
+.ai-bubble-content tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Horizontal rule in message bubbles */
+.ai-bubble-content hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+/* Typography for message bubble content */
+.ai-bubble-content h1,
+.ai-bubble-content h2,
+.ai-bubble-content h3,
+.ai-bubble-content h4,
+.ai-bubble-content h5,
+.ai-bubble-content h6 {
+  margin: 1.2em 0 0.5em;
+  line-height: 1.3;
+}
+
+.ai-bubble-content h1:first-child,
+.ai-bubble-content h2:first-child,
+.ai-bubble-content h3:first-child,
+.ai-bubble-content h4:first-child {
+  margin-top: 0;
+}
+
+.ai-bubble-content p {
+  margin: 0 0 0.75em;
+}
+
+.ai-bubble-content > :last-child {
+  margin-bottom: 0;
+}
+
 .ai-bubble-thinking {
   margin-bottom: 12px;
 }
+
 
 .ai-bubble .ai-card-body {
   padding: 0;
@@ -3149,6 +3263,18 @@ body.frontend-access-locked #frontend-password-modal {
   min-height: 46px;
 }
 
+.regenerate-button {
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.regenerate-button:hover {
+  background: var(--bg-panel-solid);
+  border-color: var(--accent);
+}
+
 .tool-row {
   display: flex;
   align-items: center;
@@ -3229,13 +3355,7 @@ body.frontend-access-locked #frontend-password-modal {
     min-width: 0;
   }
 
-  .workspace-strip-actions {
-    justify-content: flex-start;
-  }
-
-  #group-settings-toggle,
-  #reroll-synthesis,
-  #synth-model {
+  #group-settings-toggle {
     width: 100%;
   }
 
@@ -3280,4 +3400,164 @@ body.frontend-access-locked #frontend-password-modal {
   .tool-row:last-child {
     order: 1;
   }
+}
+
+/* =====================================================
+   AI Integration Expert Styles
+   ===================================================== */
+
+.friend-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.friend-expert-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+  border: 1px solid var(--accent-glow);
+}
+
+/* Friend enabled/disabled status badges */
+.friend-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+.friend-status-enabled {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+}
+
+.friend-status-disabled {
+  color: var(--caption);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--line);
+}
+
+.friend-status-expert {
+  color: #9333ea;
+  background: rgba(147, 51, 234, 0.08);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+}
+
+/* Dim disabled friend cards */
+.config-card-disabled {
+  opacity: 0.55;
+}
+
+.config-card-disabled .config-card-brand {
+  filter: grayscale(40%);
+}
+
+.expert-only-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.expert-only-toggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.expert-only-toggle.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.expert-only-toggle.is-disabled:hover {
+  background: var(--bg-secondary);
+  color: var(--muted);
+}
+
+.expert-only-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.expert-only-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.group-member-expert-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+/* Collapsible thinking content styles */
+.think-block {
+  margin: 8px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.think-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.think-summary::-webkit-details-marker {
+  display: none;
+}
+
+.think-summary-main {
+  font-weight: 500;
+}
+
+.think-toggle-btn {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.think-content {
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.think-block[open] .think-toggle-btn {
+  color: var(--text-muted);
 }

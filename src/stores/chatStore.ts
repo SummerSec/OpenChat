@@ -1,6 +1,7 @@
 // src/stores/chatStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { buildScopedStorageKey, normalizeLocalAccount } from '../utils/account-scope-utils.mjs';
 import type { Friend, Model, GroupSettings, FriendStreamState, SynthesisStreamState } from '../types/chat';
 
 interface ChatStore {
@@ -29,16 +30,50 @@ interface ChatStore {
   startSynthesis: () => void;
   updateSynthesisStreaming: (content: string) => void;
   setSynthesisDone: (content: string) => void;
+  updateGroupMemberIds: (memberIds: string[]) => void;
   endSubmission: () => void;
   reset: () => void;
 }
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
+  account: 'multiplechat-local-account',
   friends: 'openchat-friend-profiles',
   models: 'multiplechat-model-configs',
   groupSettings: 'openchat-default-group-settings',
   language: 'multiplechat-language',
 };
+
+// Non-scoped keys that should be read directly (no account prefix)
+const NON_SCOPED_KEYS = [STORAGE_KEYS.language];
+
+/** Read the account object that vanilla JS wrote to localStorage */
+function getAccountFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.account);
+    return normalizeLocalAccount(raw ? JSON.parse(raw) : {});
+  } catch {
+    return normalizeLocalAccount({});
+  }
+}
+
+/** Resolve the actual localStorage key, matching vanilla JS scoping */
+function getScopedKey(baseKey: string): string {
+  if (NON_SCOPED_KEYS.includes(baseKey)) return baseKey;
+  return buildScopedStorageKey(baseKey, getAccountFromStorage());
+}
+
+function readScoped(baseKey: string, fallback: unknown = null) {
+  try {
+    const raw = localStorage.getItem(getScopedKey(baseKey));
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeScoped(baseKey: string, value: unknown) {
+  localStorage.setItem(getScopedKey(baseKey), JSON.stringify(value));
+}
 
 const initialSynthesisState: SynthesisStreamState = {
   isStreaming: false,
@@ -61,13 +96,13 @@ export const useChatStore = create<ChatStore>()(
       shouldStartSynthesis: false,
       activeConversationId: null,
 
-      // Load data from existing localStorage keys
+      // Load data from existing localStorage keys (scoped)
       loadFromStorage: () => {
         try {
-          const friends = JSON.parse(localStorage.getItem(STORAGE_KEYS.friends) || '[]');
-          const models = JSON.parse(localStorage.getItem(STORAGE_KEYS.models) || '[]');
-          const groupSettings = JSON.parse(localStorage.getItem(STORAGE_KEYS.groupSettings) || 'null');
-          const currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || 'zh-CN';
+          const friends = readScoped(STORAGE_KEYS.friends, []) as Friend[];
+          const models = readScoped(STORAGE_KEYS.models, []) as Model[];
+          const groupSettings = readScoped(STORAGE_KEYS.groupSettings, null) as GroupSettings | null;
+          const currentLanguage = (localStorage.getItem(STORAGE_KEYS.language) || 'zh-CN') as string;
 
           set({ friends, models, groupSettings, currentLanguage });
         } catch (e) {
@@ -158,6 +193,29 @@ export const useChatStore = create<ChatStore>()(
           isDone: true,
         },
       })),
+
+      updateGroupMemberIds: (memberIds) => {
+        const current = get().groupSettings || {
+          memberIds: [],
+          sharedSystemPromptEnabled: false,
+          sharedSystemPrompt: "",
+          platformFeatureEnabled: false,
+          preferredPlatform: "gemini",
+          synthesisFriendId: null,
+        };
+        const updated = { ...current, memberIds };
+        // Keep synthesisFriendId valid
+        if (updated.synthesisFriendId && !memberIds.includes(updated.synthesisFriendId)) {
+          updated.synthesisFriendId = memberIds[0] || null;
+        }
+        set({ groupSettings: updated });
+        try {
+          writeScoped(STORAGE_KEYS.groupSettings, updated);
+          window.dispatchEvent(new CustomEvent("openchat-storage-sync"));
+        } catch (e) {
+          console.error("Failed to persist group settings:", e);
+        }
+      },
 
       endSubmission: () => set({
         isSubmitting: false,

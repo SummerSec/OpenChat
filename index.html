@@ -2,6 +2,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function(){var t=localStorage.getItem("openchat-theme");if(t)document.documentElement.setAttribute("data-theme",t)})();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-title-key="titles.workspace">OpenChat - Workspace</title>
     <meta
@@ -122,17 +125,13 @@
             </div>
             <div class="chat-header-actions">
               <div class="header-chips model-identities" id="selected-models"></div>
-              <div class="workspace-strip-actions">
-                <button
-                  class="ghost-button small-button"
-                  id="group-settings-toggle"
-                  type="button"
-                  data-i18n="home.groupSettings"
-                ></button>
-                <p class="panel-label" data-i18n="home.finalSynthesis"></p>
-                <select id="synth-model" class="inline-select"></select>
-                <button class="ghost-button small-button" id="reroll-synthesis" data-i18n="home.rebuild"></button>
-              </div>
+              <button
+                class="ghost-button small-button"
+                id="group-settings-toggle"
+                type="button"
+                data-i18n="home.groupSettings"
+              ></button>
+              <select id="synth-model" class="inline-select" hidden></select>
             </div>
           </div>
 
@@ -160,6 +159,11 @@
                 <div class="group-member-picker" id="group-member-picker"></div>
               </div>
               <div class="group-settings-block">
+                <label class="group-toggle-line" for="group-synthesis-toggle">
+                  <input id="group-synthesis-toggle" type="checkbox" />
+                  <span data-i18n="home.synthesisToggle"></span>
+                </label>
+                <p class="settings-note" data-i18n="home.synthesisHint"></p>
                 <label class="field-label" for="group-synthesis-select" data-i18n="home.synthesisFriend"></label>
                 <select id="group-synthesis-select" class="inline-select"></select>
               </div>
@@ -232,8 +236,13 @@
               <div class="tool-row">
                 <span class="tool-pill" id="run-status" data-i18n="home.ready"></span>
                 <span class="tool-pill" data-i18n="home.enterHint"></span>
+                <label class="expert-only-toggle" id="expert-only-toggle-label">
+                  <input type="checkbox" id="expert-only-toggle" />
+                  <span data-i18n="common.expertOnlyMode"></span>
+                </label>
               </div>
               <div class="tool-row">
+                <button class="send-button regenerate-button" id="reroll-synthesis" data-i18n="home.rebuild"></button>
                 <button class="send-button" id="run-workflow" data-i18n="home.run"></button>
               </div>
             </div>

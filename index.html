@@ -118,7 +118,7 @@
 
       <main class="chat-shell">
         <section class="chat-panel">
-          <div class="chat-header deepseek-chat-header">
+          <div class="chat-header deepseek-chat-header" id="chat-header">
             <div class="chat-header-meta">
               <p class="panel-label" id="chat-members-label" data-i18n="home.friendsInChat"></p>
               <strong id="selected-count"></strong>
@@ -129,10 +129,16 @@
                 class="ghost-button small-button"
                 id="group-settings-toggle"
                 type="button"
-                data-i18n="home.groupSettings"
-              ></button>
+              ><span class="group-settings-icon" aria-hidden="true">⚙</span><span class="group-settings-label" data-i18n="home.groupSettings"></span></button>
               <select id="synth-model" class="inline-select" hidden></select>
             </div>
+          </div>
+          <div class="chat-header-compact is-hidden" id="chat-header-compact">
+            <button
+              class="ghost-button compact-settings-btn"
+              id="group-settings-toggle-compact"
+              type="button"
+            ><span class="group-settings-icon" aria-hidden="true">⚙</span></button>
           </div>
 
           <div class="workspace-stage-copy">
@@ -282,6 +288,19 @@
         <div class="confirm-modal-actions">
           <button class="ghost-button" id="confirm-dialog-cancel" type="button">Cancel</button>
           <button class="primary-button" id="confirm-dialog-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="prompt-dialog" class="confirm-modal" hidden>
+      <div class="confirm-modal-backdrop"></div>
+      <div class="confirm-modal-box">
+        <div class="confirm-modal-icon">&#9998;</div>
+        <h2 id="prompt-dialog-title"></h2>
+        <input class="text-input" id="prompt-dialog-input" type="text" />
+        <div class="confirm-modal-actions">
+          <button class="ghost-button" id="prompt-dialog-cancel" type="button">Cancel</button>
+          <button class="primary-button" id="prompt-dialog-confirm" type="button">OK</button>
         </div>
       </div>
     </div>

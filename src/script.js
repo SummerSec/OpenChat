@@ -1,9 +1,8 @@
 import { buildPromptAwareMergedAnswer, buildPromptAwareMockResponse } from "./utils/mock-response-utils.mjs";
-import { detectProviderKind, hasLiveProviderConfig } from "./utils/frontend-provider-utils.mjs";
+import { hasLiveProviderConfig } from "./utils/frontend-provider-utils.mjs";
 import {
   buildModelTestPrompt,
-  describeModelTestFailure,
-  describeNonJsonModelResponse
+  describeModelTestFailure
 } from "./utils/model-test-utils.mjs";
 import {
   buildFallbackSynthesis,
@@ -19,6 +18,7 @@ import {
 import { countSelectedGroupMembers } from "../features/group/group-settings-utils.mjs";
 import { getWorkflowPreflightState } from "../features/group/workflow-run-utils.mjs";
 import { hasThinkingContent, normalizeThinkingEnabled } from "./utils/thinking-config-utils.mjs";
+import { callFrontendStream } from "./utils/ai-sdk-frontend-stream.mjs";
 import { renderSafeMarkdown } from "./utils/markdown-render-utils.mjs";
 import { renderAiMessageMarkdown } from "./utils/ai-message-streamdown.js";
 import {
@@ -446,6 +446,8 @@ const I18N = {
       navFriends: "\u7fa4\u53cb",
       navAccount: "\u8d26\u6237",
       navHistory: "\u5386\u53f2",
+      collapseSidebar: "\u6536\u8d77",
+      expandSidebar: "\u5c55\u5f00",
       guest: "\u672a\u767b\u5f55",
       close: "\u5173\u95ed",
       isIntegrationExpert: "\u8bbe\u4e3a\u6574\u5408\u4e13\u5bb6",
@@ -674,6 +676,8 @@ const I18N = {
       navFriends: "Friends",
       navAccount: "Account",
       navHistory: "History",
+      collapseSidebar: "Collapse",
+      expandSidebar: "Expand",
       guest: "Guest",
       close: "Close",
       isIntegrationExpert: "Set as Integration Expert",
@@ -696,6 +700,9 @@ const I18N = {
 
 // Confirm dialog state
 let confirmDialogResolve = null;
+
+// Prompt dialog state
+let promptDialogResolve = null;
 
 function initConfirmDialog() {
   const dialog = document.getElementById("confirm-dialog");
@@ -728,6 +735,75 @@ function initConfirmDialog() {
       }
       dialog.hidden = true;
     }
+  });
+}
+
+function initPromptDialog() {
+  const dialog = document.getElementById("prompt-dialog");
+  const input = document.getElementById("prompt-dialog-input");
+  const cancelBtn = document.getElementById("prompt-dialog-cancel");
+  const confirmBtn = document.getElementById("prompt-dialog-confirm");
+
+  if (!dialog || !input || !cancelBtn || !confirmBtn) return;
+
+  const dismiss = () => {
+    if (promptDialogResolve) {
+      promptDialogResolve(null);
+      promptDialogResolve = null;
+    }
+    dialog.hidden = true;
+  };
+
+  const accept = () => {
+    if (promptDialogResolve) {
+      promptDialogResolve(input.value);
+      promptDialogResolve = null;
+    }
+    dialog.hidden = true;
+  };
+
+  cancelBtn.addEventListener("click", dismiss);
+  confirmBtn.addEventListener("click", accept);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      accept();
+    }
+  });
+
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog || e.target.classList.contains("confirm-modal-backdrop")) {
+      dismiss();
+    }
+  });
+}
+
+function showPrompt(title, defaultValue = "") {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById("prompt-dialog");
+    const titleEl = document.getElementById("prompt-dialog-title");
+    const input = document.getElementById("prompt-dialog-input");
+    const confirmBtn = document.getElementById("prompt-dialog-confirm");
+    const cancelBtn = document.getElementById("prompt-dialog-cancel");
+
+    if (!dialog) {
+      resolve(window.prompt(title));
+      return;
+    }
+
+    promptDialogResolve = resolve;
+
+    if (titleEl) titleEl.textContent = title || "";
+    if (input) {
+      input.value = defaultValue;
+      input.placeholder = title || "";
+    }
+    if (confirmBtn) confirmBtn.textContent = t("common.confirm") || "OK";
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel") || "Cancel";
+
+    dialog.hidden = false;
+    if (input) setTimeout(() => input.focus(), 50);
   });
 }
 
@@ -1806,7 +1882,9 @@ function setRuntimeStatus(message) {
 function autosizePromptInput() {
   if (!promptInput) return;
   promptInput.style.height = "0px";
-  promptInput.style.height = `${Math.min(Math.max(promptInput.scrollHeight, 112), 260)}px`;
+  const minH = window.innerWidth <= 640 ? 44 : 64;
+  const maxH = Math.min(Math.round(window.innerHeight * 0.4), 260);
+  promptInput.style.height = `${Math.min(Math.max(promptInput.scrollHeight, minH), maxH)}px`;
 }
 
 function scrollMessageStreamToBottom() {
@@ -2181,336 +2259,6 @@ function buildPlatformSourceLabel(platformContext, baseSource) {
   return `${baseSource} · ${platformContext.name}`;
 }
 
-/**
- * Call OpenAI compatible API with streaming support
- * @param {Object} model - Model config
- * @param {string} prompt - User prompt
- * @param {string} systemPrompt - System prompt
- * @param {Object} options - Options including onDelta callback
- * @returns {Promise<{content: string, thinking: string}>}
- */
-
-/**
- * Extract <think>...</think> blocks from text, returning separated content and thinking.
- * Supports multiple <think> blocks and unclosed blocks.
- */
-function extractThinkBlocks(text) {
-  if (!text || !text.includes("<think>")) return { content: text, thinking: "" };
-  let content = "";
-  let thinking = "";
-  let remaining = text;
-  while (remaining.length > 0) {
-    const openIdx = remaining.indexOf("<think>");
-    if (openIdx === -1) {
-      content += remaining;
-      break;
-    }
-    content += remaining.slice(0, openIdx);
-    remaining = remaining.slice(openIdx + 7);
-    const closeIdx = remaining.indexOf("</think>");
-    if (closeIdx !== -1) {
-      thinking += (thinking ? "\n" : "") + remaining.slice(0, closeIdx);
-      remaining = remaining.slice(closeIdx + 8);
-    } else {
-      // Unclosed think block — treat rest as thinking
-      thinking += (thinking ? "\n" : "") + remaining;
-      remaining = "";
-    }
-  }
-  return { content: content.trim(), thinking: thinking.trim() };
-}
-
-async function callOpenAICompatibleFrontendStream(model, prompt, systemPrompt = "", options = {}) {
-  console.debug("[Stream] Starting OpenAI compatible stream call", {
-    model: model.model,
-    baseUrl: model.baseUrl,
-    hasApiKey: !!model.apiKey && model.apiKey.length > 0
-  });
-  const messages = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  if (Array.isArray(options.history) && options.history.length > 0) {
-    messages.push(...options.history);
-  }
-  messages.push({ role: "user", content: prompt });
-
-  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${model.apiKey}`
-    },
-    body: JSON.stringify({
-      model: model.model,
-      messages,
-      stream: true,
-      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
-    })
-  });
-
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => "");
-    const error = new Error(`HTTP ${response.status}: ${responseText.slice(0, 200) || 'No response body'}`);
-    error.status = response.status;
-    error.responseText = responseText;
-    error.contentType = response.headers.get("content-type") || "";
-    console.error("[Stream] Fetch failed", { status: error.status, text: error.responseText });
-    throw error;
-  }
-
-  if (!response.body) {
-    console.error("[Stream] Response.body is null, streaming not supported. Response headers:", Object.fromEntries(response.headers.entries()));
-    throw new Error("Streaming is not supported by this API endpoint");
-  }
-
-  console.debug("[Stream] Stream connection established");
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullContent = "";
-  let fullThinking = "";
-  // Track <think> block state for models that embed thinking in content (e.g. MiniMax, DeepSeek)
-  let insideThinkTag = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // Support both SSE format ("data: {json}") and NDJSON format ("{json}")
-      let data;
-      if (trimmed.startsWith("data:")) {
-        data = trimmed.slice(5).trimStart();
-      } else if (trimmed.startsWith("{")) {
-        data = trimmed;
-      } else {
-        continue;
-      }
-      if (data === "[DONE]") continue;
-
-      try {
-        const chunk = JSON.parse(data);
-        const delta = chunk.choices?.[0]?.delta;
-        if (!delta) {
-          console.debug("[Stream] No delta in chunk, choices:", JSON.stringify(chunk.choices?.length));
-          continue;
-        }
-
-        // Method 1: delta.reasoning_content (e.g. DeepSeek, Kimi)
-        if (delta.reasoning_content) {
-          fullThinking += delta.reasoning_content;
-          options.onDelta?.({ type: "thinking", text: delta.reasoning_content });
-        }
-
-        // Method 2: <think> tags embedded in delta.content (e.g. MiniMax)
-        // Also handles normal content without think tags
-        if (delta.content) {
-          let text = delta.content;
-          while (text.length > 0) {
-            if (insideThinkTag) {
-              const closeIdx = text.indexOf("</think>");
-              if (closeIdx !== -1) {
-                const thinkPart = text.slice(0, closeIdx);
-                if (thinkPart) {
-                  fullThinking += thinkPart;
-                  options.onDelta?.({ type: "thinking", text: thinkPart });
-                }
-                insideThinkTag = false;
-                text = text.slice(closeIdx + 8);
-              } else {
-                fullThinking += text;
-                options.onDelta?.({ type: "thinking", text });
-                text = "";
-              }
-            } else {
-              const openIdx = text.indexOf("<think>");
-              if (openIdx !== -1) {
-                const contentPart = text.slice(0, openIdx);
-                if (contentPart) {
-                  fullContent += contentPart;
-                  options.onDelta?.({ type: "content", text: contentPart });
-                }
-                insideThinkTag = true;
-                text = text.slice(openIdx + 7);
-              } else {
-                fullContent += text;
-                options.onDelta?.({ type: "content", text });
-                text = "";
-              }
-            }
-          }
-        }
-      } catch {
-        // Skip invalid JSON
-      }
-    }
-  }
-
-  console.debug("[Stream] FINISHED. fullContent length:", fullContent.length, "fullThinking length:", fullThinking.length, "preview:", fullContent.slice(0, 100));
-
-  // Post-process: if <think> tags were split across chunks and ended up in content,
-  // re-extract them from the accumulated result
-  let finalContent = fullContent.trim();
-  let finalThinking = fullThinking.trim();
-  if (!finalThinking && finalContent.includes("<think>")) {
-    const extracted = extractThinkBlocks(finalContent);
-    finalContent = extracted.content;
-    finalThinking = extracted.thinking;
-  }
-
-  return { content: finalContent, thinking: finalThinking };
-}
-
-async function callOpenAICompatibleFrontend(model, prompt, systemPrompt = "", options = {}) {
-  const messages = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  if (Array.isArray(options.history) && options.history.length > 0) {
-    messages.push(...options.history);
-  }
-  messages.push({ role: "user", content: prompt });
-  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${model.apiKey}`
-    },
-    body: JSON.stringify({
-      model: model.model,
-      messages,
-      ...(options.thinkingEnabled ? { reasoning: { effort: "medium" } } : {})
-    })
-  });
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => "");
-    const error = new Error(`HTTP ${response.status}`);
-    error.status = response.status;
-    error.responseText = responseText;
-    error.contentType = response.headers.get("content-type") || "";
-    throw error;
-  }
-  const data = await response.json();
-  const message = data.choices?.[0]?.message || {};
-  let content =
-    typeof message.content === "string"
-      ? message.content
-      : Array.isArray(message.content)
-      ? message.content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
-      : "";
-  let thinking =
-    typeof message.reasoning_content === "string"
-      ? message.reasoning_content
-      : Array.isArray(message.reasoning_content)
-      ? message.reasoning_content.map((item) => item?.text || "").filter(Boolean).join("\n\n")
-      : "";
-  // Extract <think> blocks from content (e.g. MiniMax, some DeepSeek modes)
-  const extracted = extractThinkBlocks(content);
-  if (extracted.thinking) {
-    thinking = thinking ? `${thinking}\n\n${extracted.thinking}` : extracted.thinking;
-    content = extracted.content;
-  }
-  return { content: content.trim(), thinking: thinking.trim() };
-}
-
-async function callAnthropicFrontend(model, prompt, systemPrompt = "", options = {}) {
-  const response = await fetch(`${String(model.baseUrl || "").replace(/\/+$/, "")}/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "x-api-key": model.apiKey
-    },
-    body: JSON.stringify({
-      model: model.model,
-      max_tokens: 1200,
-      system: systemPrompt || undefined,
-      ...(options.thinkingEnabled ? { thinking: { type: "enabled", budget_tokens: 1024 } } : {}),
-      messages: [
-        ...(Array.isArray(options.history) ? options.history : []),
-        { role: "user", content: prompt }
-      ]
-    })
-  });
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => "");
-    const error = new Error(`HTTP ${response.status}`);
-    error.status = response.status;
-    error.responseText = responseText;
-    error.contentType = response.headers.get("content-type") || "";
-    throw error;
-  }
-  const data = await response.json();
-  const blocks = Array.isArray(data.content) ? data.content : [];
-  return {
-    content: blocks
-      .filter((item) => item?.type === "text")
-      .map((item) => item?.text || "")
-      .filter(Boolean)
-      .join("\n\n")
-      .trim(),
-    thinking: blocks
-      .filter((item) => item?.type === "thinking")
-      .map((item) => item?.thinking || item?.text || "")
-      .filter(Boolean)
-      .join("\n\n")
-      .trim()
-  };
-}
-
-async function callGeminiFrontend(model, prompt, systemPrompt = "", options = {}) {
-  const historyContents = (Array.isArray(options.history) ? options.history : []).map((msg) => ({
-    role: msg.role === "assistant" ? "model" : "user",
-    parts: [{ text: msg.content }]
-  }));
-  const response = await fetch(
-    `${String(model.baseUrl || "").replace(/\/+$/, "")}/models/${encodeURIComponent(model.model)}:generateContent?key=${encodeURIComponent(model.apiKey)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
-        contents: [
-          ...historyContents,
-          {
-            role: "user",
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ]
-      })
-    }
-  );
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => "");
-    const error = new Error(`HTTP ${response.status}`);
-    error.status = response.status;
-    error.responseText = responseText;
-    error.contentType = response.headers.get("content-type") || "";
-    throw error;
-  }
-  const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  return {
-    content: parts.map((item) => item?.text || "").filter(Boolean).join("\n\n").trim(),
-    thinking: ""
-  };
-}
-
 async function generateFrontendFriendResponse(friend, prompt, platformContext, targetId, runId) {
   console.debug("[Frontend Response] Generating response for friend:", friend.name, friend.id, "hasLiveProviderConfig:", hasLiveProviderConfig(friend));
   const history = buildConversationHistoryForFriend(friend.id, runId);
@@ -2547,50 +2295,37 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
   }
 
   try {
-    let output;
-    const providerKind = detectProviderKind(friend);
+    let currentContent = "";
+    let currentThinking = "";
 
-    // Use streaming for OpenAI compatible providers
-    if (providerKind !== "anthropic" && providerKind !== "gemini" && targetId) {
-      console.debug("[Frontend Response] Using streaming for provider:", providerKind);
-      let currentContent = "";
-      let currentThinking = "";
-
-      // Mark message as streaming
+    if (targetId) {
       updateConversationMessageById(targetId, { isLoading: true });
+    }
 
-      output = await callOpenAICompatibleFrontendStream(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled),
-        history,
-        onDelta: (delta) => {
-          if (delta.type === "thinking") {
-            currentThinking += delta.text;
-            updateConversationMessageById(targetId, {
-              thinking: currentThinking,
-              isLoading: true
-            });
-          } else if (delta.type === "content") {
-            currentContent += delta.text;
-            updateConversationMessageById(targetId, {
-              content: currentContent,
-              isLoading: true
-            });
-          }
-          renderMessageStream();
+    const output = await callFrontendStream(friend, prompt, systemPrompt, {
+      history,
+      onDelta: targetId ? (delta) => {
+        if (delta.type === "thinking") {
+          currentThinking += delta.text;
+          updateConversationMessageById(targetId, {
+            thinking: currentThinking,
+            isLoading: true
+          });
+        } else if (delta.type === "content") {
+          currentContent += delta.text;
+          updateConversationMessageById(targetId, {
+            content: currentContent,
+            isLoading: true
+          });
         }
-      });
+        renderMessageStream();
+      } : undefined,
+    });
 
-      // Post-process: if <think> tags were split across chunks and ended up in content,
-      // re-extract them from the accumulated result
-      let finalContent = output.content || "";
-      let finalThinking = output.thinking || "";
-      if (!finalThinking && finalContent.includes("<think>")) {
-        const extracted = extractThinkBlocks(finalContent);
-        finalContent = extracted.content;
-        finalThinking = extracted.thinking;
-      }
+    const finalContent = output.content || "";
+    const finalThinking = output.thinking || "";
 
-      // Mark streaming complete and sync final content/thinking into conversation message
+    if (targetId) {
       updateConversationMessageById(targetId, {
         content: finalContent,
         thinking: finalThinking,
@@ -2598,46 +2333,6 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
       });
       renderMessageStream();
       renderSynthesisOptions();
-
-      return {
-        friendId: friend.id,
-        name: friend.name,
-        avatar: friend.avatar || friend.modelAvatar || "",
-        modelConfigId: friend.modelConfigId,
-        modelConfigName: friend.modelConfigName,
-        provider: friend.provider,
-        model: friend.model,
-        source: buildPlatformSourceLabel(platformContext, t("common.configured")),
-        thinking: finalThinking,
-        content: finalContent,
-        error: ""
-      };
-    }
-
-    // Non-streaming for Anthropic and Gemini (fallback)
-    if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled),
-        history
-      });
-    } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled),
-        history
-      });
-    } else {
-      output = await callOpenAICompatibleFrontend(friend, prompt, systemPrompt, {
-        thinkingEnabled: Boolean(friend.thinkingEnabled),
-        history
-      });
-    }
-
-    // Simulate streaming for non-streaming providers
-    if (output.thinking && targetId) {
-      await streamTextToMessage(targetId, output.thinking, "thinking");
-    }
-    if (output.content && targetId) {
-      await streamTextToMessage(targetId, output.content, "content");
     }
 
     return {
@@ -2649,8 +2344,8 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
       provider: friend.provider,
       model: friend.model,
       source: buildPlatformSourceLabel(platformContext, t("common.configured")),
-      thinking: output.thinking || "",
-      content: output.content || "",
+      thinking: finalThinking,
+      content: finalContent,
       error: ""
     };
   } catch (error) {
@@ -2715,35 +2410,29 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
   }
 
   try {
-    let output;
-    const providerKind = detectProviderKind(synthesisFriend);
+    let currentContent = "";
+    let currentThinking = "";
 
-    // Use streaming for OpenAI compatible providers
-    if (providerKind !== "anthropic" && providerKind !== "gemini" && targetId) {
-      let currentContent = "";
-      let currentThinking = "";
-
-      output = await callOpenAICompatibleFrontendStream(synthesisFriend, synthesisPrompt, systemPrompt, {
-        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled),
-        onDelta: (delta) => {
-          if (delta.type === "thinking") {
-            currentThinking += delta.text;
-            updateConversationMessageById(targetId, {
-              thinking: currentThinking,
-              isLoading: true
-            });
-          } else if (delta.type === "content") {
-            currentContent += delta.text;
-            updateConversationMessageById(targetId, {
-              content: currentContent,
-              isLoading: true
-            });
-          }
-          renderMessageStream();
+    const output = await callFrontendStream(synthesisFriend, synthesisPrompt, systemPrompt, {
+      onDelta: targetId ? (delta) => {
+        if (delta.type === "thinking") {
+          currentThinking += delta.text;
+          updateConversationMessageById(targetId, {
+            thinking: currentThinking,
+            isLoading: true
+          });
+        } else if (delta.type === "content") {
+          currentContent += delta.text;
+          updateConversationMessageById(targetId, {
+            content: currentContent,
+            isLoading: true
+          });
         }
-      });
+        renderMessageStream();
+      } : undefined,
+    });
 
-      // Mark streaming complete and sync final content
+    if (targetId) {
       updateConversationMessageById(targetId, {
         content: output.content || "",
         thinking: output.thinking || "",
@@ -2751,33 +2440,6 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
       });
       renderMessageStream();
       renderSynthesisOptions();
-
-      return {
-        content: output.content || "",
-        source: t("common.configured"),
-        error: "",
-        payload: synthesisPayload
-      };
-    }
-
-    // Non-streaming for Anthropic and Gemini
-    if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
-        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
-      });
-    } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
-        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
-      });
-    } else {
-      output = await callOpenAICompatibleFrontend(synthesisFriend, synthesisPrompt, systemPrompt, {
-        thinkingEnabled: Boolean(synthesisFriend.thinkingEnabled)
-      });
-    }
-
-    // Simulate streaming for non-streaming providers
-    if (output.content && targetId) {
-      await streamTextToMessage(targetId, output.content, "content");
     }
 
     return {
@@ -2800,45 +2462,25 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
   }
 }
 
-async function testModelConnection(model) {
+async function testModelConnection(model, onDelta) {
   const prompt = buildModelTestPrompt(currentLanguage);
   if (!hasLiveProviderConfig(model)) {
     return { ok: false, message: t("common.testMissingConfig") };
   }
 
   try {
-    const providerKind = detectProviderKind(model);
-    let output;
-    if (providerKind === "anthropic") {
-      output = await callAnthropicFrontend(model, prompt, "", {
-        thinkingEnabled: Boolean(model.thinkingEnabled)
-      });
-    } else if (providerKind === "gemini") {
-      output = await callGeminiFrontend(model, prompt, "", {
-        thinkingEnabled: Boolean(model.thinkingEnabled)
-      });
-    } else {
-      output = await callOpenAICompatibleFrontend(model, prompt, "", {
-        thinkingEnabled: Boolean(model.thinkingEnabled)
-      });
-    }
+    const output = await callFrontendStream(model, prompt, "", {
+      onDelta: onDelta ? (delta) => {
+        if (delta.type === "content") {
+          onDelta(delta.text);
+        }
+      } : undefined,
+    });
     return {
       ok: true,
       message: output.content ? `${t("common.testSuccess")}: ${output.content}` : t("common.testSuccess")
     };
   } catch (error) {
-    const text = String(error?.responseText || "");
-    if (text) {
-      const described = describeNonJsonModelResponse(text, error.status || 200, error.contentType || "");
-      return {
-        ok: false,
-        message: describeModelTestFailure({
-          message: described.message,
-          language: currentLanguage,
-          mode: runtimeMode
-        }).message
-      };
-    }
     return {
       ok: false,
       message: describeModelTestFailure({
@@ -2873,10 +2515,23 @@ async function runModelConnectionTest(id, card) {
   modelTestState[id] = { status: "pending", message: t("common.testing") };
   renderConfigGrid();
 
+  // Find the status element for streaming updates
+  const statusEl = card.querySelector(".config-test-status") ||
+    configGrid?.querySelector(`[data-id="${id}"] .config-test-status`);
+
+  let streamedContent = "";
+  const onDelta = (text) => {
+    streamedContent += text;
+    if (statusEl) {
+      statusEl.textContent = `${t("common.testSuccess")}: ${streamedContent}`;
+      statusEl.className = "config-test-status success";
+    }
+  };
+
   const result =
     runtimeMode === "backend"
       ? await testModelConnectionViaBackend(draft).catch((error) => ({ ok: false, message: error.message }))
-      : await testModelConnection(draft);
+      : await testModelConnection(draft, onDelta);
 
   modelTestState[id] = {
     status: result.ok ? "success" : "error",
@@ -3170,6 +2825,13 @@ function renderMessageStream() {
   if (suggestionRow) {
     suggestionRow.classList.toggle("is-hidden", currentConversation.length > 0);
   }
+
+  // Toggle between full chat header and compact ⚙ button
+  const hasMessages = currentConversation.length > 0;
+  const chatHeader = document.getElementById("chat-header");
+  const chatHeaderCompact = document.getElementById("chat-header-compact");
+  if (chatHeader) chatHeader.classList.toggle("is-hidden", hasMessages);
+  if (chatHeaderCompact) chatHeaderCompact.classList.toggle("is-hidden", !hasMessages);
 
   // Remove empty state as soon as conversation has messages
   if (currentConversation.length > 0) {
@@ -3780,7 +3442,7 @@ function loadConversationByIndex(index, { focus = false } = {}) {
   );
   draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
   if (promptInput) {
-    promptInput.value = session.prompt || "";
+    promptInput.value = "";
     autosizePromptInput();
   }
   if (synthModelSelect) {
@@ -4174,6 +3836,10 @@ async function runWorkflow(options = {}) {
   );
   renderMessageStream();
 
+  // Clear the input after the message has been captured and rendered
+  promptInput.value = "";
+  autosizePromptInput();
+
   let results = [];
   let mergedAnswer = buildFallbackSynthesis({ prompt, language: currentLanguage, results: [] });
   let disagreements = [t("common.d1"), t("common.d2"), t("common.d3")];
@@ -4447,6 +4113,30 @@ function bindLanguageControls() {
   });
 }
 
+function bindPageSidebarToggle() {
+  const btn = document.getElementById("sidebar-collapse-btn");
+  const layout = document.querySelector(".page-layout");
+  if (!btn || !layout) return;
+  const STORAGE_KEY = "openchat-sidebar-collapsed";
+  const isCollapsed = localStorage.getItem(STORAGE_KEY) === "1";
+  if (isCollapsed) layout.classList.add("sidebar-collapsed");
+  const updateLabel = () => {
+    const labelEl = btn.querySelector(".sidebar-nav-label");
+    if (labelEl) {
+      const collapsed = layout.classList.contains("sidebar-collapsed");
+      labelEl.setAttribute("data-i18n", collapsed ? "common.expandSidebar" : "common.collapseSidebar");
+      labelEl.textContent = t(collapsed ? "common.expandSidebar" : "common.collapseSidebar");
+    }
+  };
+  updateLabel();
+  btn.addEventListener("click", () => {
+    layout.classList.toggle("sidebar-collapsed");
+    const collapsed = layout.classList.contains("sidebar-collapsed");
+    localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+    updateLabel();
+  });
+}
+
 function bindWorkspaceEvents() {
   // Think block toggle button text update
   messageStream?.addEventListener("toggle", (event) => {
@@ -4554,14 +4244,17 @@ function bindWorkspaceEvents() {
     renderSynthesisOptions();
   });
 
-  groupSettingsToggleButton?.addEventListener("click", () => {
+  function handleGroupSettingsToggle() {
     isGroupSettingsOpen = !isGroupSettingsOpen;
     draftGroupSettings = cloneGroupSettings(currentConversationGroupSettings);
     if (!isGroupSettingsOpen) {
       isGroupMemberDetailsOpen = false;
     }
     renderGroupSettingsPanel();
-  });
+  }
+
+  groupSettingsToggleButton?.addEventListener("click", handleGroupSettingsToggle);
+  document.getElementById("group-settings-toggle-compact")?.addEventListener("click", handleGroupSettingsToggle);
 
   groupSettingsCloseButton?.addEventListener("click", () => {
     isGroupSettingsOpen = false;
@@ -4804,7 +4497,7 @@ function bindSettingsEvents() {
       if (!current) return;
       const newConfig = {
         ...current,
-        id: generateId(),
+        id: `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
         name: current.name + t("common.copySuffix"),
         enabled: true
       };
@@ -4929,7 +4622,7 @@ function bindFriendEvents() {
       const textarea = card?.querySelector('[data-friend-field="systemPrompt"]');
       const content = textarea?.value || "";
       if (!content.trim()) return;
-      const name = prompt(t("common.promptTemplateNamePlaceholder"));
+      const name = await showPrompt(t("common.promptTemplateNamePlaceholder"));
       if (!name || !name.trim()) return;
       promptTemplates = [{
         id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -5213,9 +4906,11 @@ function bindUserMenu() {
 
   document.addEventListener("click", (event) => {
     if (!isGroupSettingsOpen || !groupSettingsPanel || !groupSettingsToggleButton) return;
+    const compactToggle = document.getElementById("group-settings-toggle-compact");
     if (
       groupSettingsPanel.contains(event.target) ||
-      groupSettingsToggleButton.contains(event.target)
+      groupSettingsToggleButton.contains(event.target) ||
+      compactToggle?.contains(event.target)
     ) {
       return;
     }
@@ -5236,6 +4931,7 @@ async function initializeApp() {
 
   initTheme();
   initConfirmDialog();
+  initPromptDialog();
   applyLanguage();
   renderAccount();
   renderRuntime();
@@ -5273,6 +4969,7 @@ async function initializeApp() {
 
   autosizePromptInput();
   bindLanguageControls();
+  bindPageSidebarToggle();
   bindWorkspaceEvents();
   bindSettingsEvents();
   bindFriendEvents();

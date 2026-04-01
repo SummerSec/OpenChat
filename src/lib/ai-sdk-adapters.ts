@@ -40,10 +40,9 @@ export function createModelInstance(friend: Friend): any {
         apiKey,
         baseURL: baseUrl,
       });
-      // @ts-expect-error - provider accepts 2nd arg for thinking config
       return anthropic(modelId, {
         ...(friend.thinkingEnabled
-          ? { thinking: { type: "enabled", budget_tokens: 1024 } }
+          ? { thinking: { type: "enabled", budgetTokens: 1024 } }
           : {}),
       });
     }
@@ -64,9 +63,8 @@ export function createModelInstance(friend: Friend): any {
         compatibility: "compatible",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
-      // @ts-expect-error - provider accepts 2nd arg for reasoning config
       return openai(modelId, {
-        ...(friend.thinkingEnabled ? { reasoning_effort: "medium" } : {}),
+        ...(friend.thinkingEnabled ? { reasoningEffort: "medium" } : {}),
       });
     }
   }

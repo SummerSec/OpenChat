@@ -371,7 +371,7 @@ async function streamFriendResponse(friend, prompt, onChunk, options = {}) {
   let fullThinking = "";
   let insideThinkTag = false;
 
-  const { textStream, text, reasoning } = streamText({
+  const { textStream, text, reasoningText: reasoning } = streamText({
     model: provider(model.model),
     messages,
     ...(thinkingEnabled && model.provider === "Anthropic" ? { thinking: { type: "enabled", budgetTokens: 1024 } } : {}),

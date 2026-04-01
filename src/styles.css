@@ -527,10 +527,162 @@ a {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   height: 100vh;
+  height: 100dvh;
 }
 
 .app-layout {
   grid-template-columns: var(--sider-width) minmax(0, 1fr);
+}
+
+/* ==========================================================================
+   Page sidebar — expanded by default on sub-pages (settings, friends, etc.)
+   ========================================================================== */
+.page-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+  transition: grid-template-columns 200ms ease;
+}
+
+.page-layout.sidebar-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+.page-sidebar .sidebar-rail {
+  align-items: stretch;
+  gap: 10px;
+  padding: 18px 12px;
+}
+
+.page-sidebar .sidebar-brand {
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.page-sidebar .lang-switch {
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 140ms ease, color 140ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-nav-item [class^="icon-"] {
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 200ms ease, width 200ms ease;
+}
+
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Collapse icon: left-pointing double chevron */
+.sidebar-collapse-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-icon::before,
+.sidebar-collapse-icon::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  width: 7px;
+  height: 7px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.sidebar-collapse-icon::before {
+  left: 1px;
+}
+
+.sidebar-collapse-icon::after {
+  left: 7px;
+}
+
+/* Collapsed state */
+.sidebar-collapsed .page-sidebar .sidebar-rail {
+  align-items: center;
+  padding: 18px 8px;
+}
+
+.sidebar-collapsed .sidebar-nav-label {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.sidebar-collapsed .sidebar-nav-item,
+.sidebar-collapsed .sidebar-collapse-btn {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+
+.sidebar-collapsed .sidebar-collapse-icon {
+  transform: rotate(180deg);
+}
+
+.sidebar-collapsed .page-sidebar .lang-switch {
+  align-self: center;
 }
 
 .sidebar {
@@ -1351,6 +1503,7 @@ textarea:focus {
   width: var(--sider-width);
   min-width: 0;
   height: 100vh;
+  height: 100dvh;
   padding: 16px 14px;
   background: var(--bg-secondary);
 }
@@ -1952,6 +2105,7 @@ body.frontend-access-locked #frontend-password-modal {
 .chat-shell {
   min-width: 0;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   padding: 0 28px;
   background: var(--ambient-gradient), var(--bg-primary);
@@ -1980,6 +2134,14 @@ body.frontend-access-locked #frontend-password-modal {
   border-radius: 24px;
   background: var(--bg-panel);
   box-shadow: 0 16px 38px rgba(44, 36, 32, 0.05);
+}
+
+.deepseek-chat-header.is-hidden {
+  display: none;
+}
+
+.chat-header-compact.is-hidden {
+  display: none;
 }
 
 .deepseek-chat-header::after {
@@ -2019,6 +2181,37 @@ body.frontend-access-locked #frontend-password-modal {
 #group-settings-toggle {
   min-width: 110px;
   font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.group-settings-icon {
+  font-style: normal;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.chat-header-compact {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 0;
+}
+
+.compact-settings-btn {
+  width: 38px;
+  height: 38px;
+  min-height: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compact-settings-btn .group-settings-icon {
+  font-size: 1.1rem;
 }
 
 .workspace-stage-copy {
@@ -3222,8 +3415,8 @@ body.frontend-access-locked #frontend-password-modal {
   flex-shrink: 0;
   width: min(100%, 980px);
   margin: 0 auto 16px;
-  padding: 18px 20px 16px;
-  border-radius: 30px;
+  padding: 14px 18px 12px;
+  border-radius: 28px;
   border: 1px solid var(--line);
   background: var(--bg-panel);
   box-shadow: 0 24px 56px rgba(44, 36, 32, 0.1);
@@ -3232,12 +3425,13 @@ body.frontend-access-locked #frontend-password-modal {
 }
 
 .chat-composer textarea {
-  min-height: 112px;
+  min-height: 64px;
+  max-height: 40vh;
   height: auto;
   resize: none;
   border: 1px solid var(--line);
   border-radius: 22px;
-  padding: 18px 18px 16px;
+  padding: 14px 16px;
   background: var(--bg-panel-solid);
   line-height: 1.76;
   box-shadow: inset 0 1px 2px rgba(44, 36, 32, 0.02);
@@ -3311,12 +3505,15 @@ body.frontend-access-locked #frontend-password-modal {
 
 @media (max-width: 1080px) {
   .layout,
-  .app-layout {
+  .app-layout,
+  .page-layout,
+  .page-layout.sidebar-collapsed {
     grid-template-columns: 1fr;
   }
 
   .sidebar,
-  .workspace-sidebar {
+  .workspace-sidebar,
+  .page-sidebar {
     display: none;
   }
 
@@ -3399,6 +3596,163 @@ body.frontend-access-locked #frontend-password-modal {
 
   .tool-row:last-child {
     order: 1;
+  }
+}
+
+/* ==========================================================================
+   Phone screens — compact layout for small viewports
+   ========================================================================== */
+@media (max-width: 640px) {
+  .chat-shell {
+    padding: 0 8px;
+  }
+
+  .chat-panel {
+    padding: 8px 0 0;
+  }
+
+  .deepseek-chat-header {
+    padding: 10px 12px;
+    border-radius: 16px;
+    margin-bottom: 6px;
+    gap: 10px;
+  }
+
+  .chat-header-meta strong {
+    font-size: 0.95rem;
+  }
+
+  .workspace-stage-copy {
+    padding: 0 4px 6px;
+  }
+
+  .workspace-stage-kicker {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+  }
+
+  .workspace-stage-title {
+    font-size: clamp(1.4rem, 5vw, 1.9rem);
+  }
+
+  .workspace-stage-copy::after {
+    margin-top: 10px;
+  }
+
+  .message-stream {
+    padding: 10px 4px 14px;
+    gap: 12px;
+  }
+
+  .message-bubble {
+    max-width: 100%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 0.88rem;
+  }
+
+  .message-bubble.ai-bubble {
+    max-width: 100%;
+  }
+
+  .ai-bubble-content {
+    padding: 12px 14px;
+  }
+
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .message-row {
+    gap: 8px;
+  }
+
+  .suggestion-row {
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  .suggestion-card {
+    flex: 1 1 140px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: 0.84rem;
+  }
+
+  .chat-composer {
+    margin-bottom: 8px;
+    padding: 12px 14px 10px;
+    border-radius: 22px;
+  }
+
+  .chat-composer textarea {
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .composer-toolbar {
+    margin-top: 8px;
+    gap: 8px;
+  }
+
+  .send-button {
+    min-width: 100px;
+    min-height: 40px;
+    font-size: 0.88rem;
+  }
+
+  .tool-pill {
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 0.74rem;
+  }
+
+  .group-settings-panel {
+    top: 60px;
+    padding: 16px;
+    border-radius: 20px;
+    max-height: 75vh;
+  }
+
+  .ai-card {
+    border-radius: 18px;
+  }
+
+  .ai-card-header {
+    padding: 10px 14px;
+  }
+
+  .ai-card-section {
+    padding: 10px 14px 14px;
+  }
+
+  .model-chip {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 0.78rem;
+  }
+
+  .page-main {
+    padding: 16px 12px;
+  }
+
+  .page-header h1 {
+    font-size: 1.6rem;
+  }
+
+  .login-modal-box {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .confirm-modal-box {
+    padding: 24px;
+    border-radius: 18px;
   }
 }
 

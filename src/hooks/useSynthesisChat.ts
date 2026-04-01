@@ -77,65 +77,15 @@ export function useSynthesisChat({
           abortSignal: abortControllerRef.current?.signal,
         });
 
-        const response = result.toDataStreamResponse({ sendReasoning: true });
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('Failed to get stream reader');
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            fullContent += part.text;
+            updateSynthesisStreaming(fullContent);
+          }
         }
 
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              const trimmedLine = line.trim();
-              if (!trimmedLine.startsWith('data: ')) continue;
-
-              const data = trimmedLine.slice(6).trim();
-              if (!data || data === '[DONE]') continue;
-
-              // Parse content ("0:" prefix)
-              if (data.startsWith('"0:')) {
-                try {
-                  const text = JSON.parse(data.slice(1));
-                  fullContent += text;
-                  updateSynthesisStreaming(fullContent);
-                } catch {
-                  // ignore parse errors
-                }
-              }
-            }
-          }
-
-          // Process remaining buffer
-          if (buffer.trim()) {
-            const trimmedLine = buffer.trim();
-            if (trimmedLine.startsWith('data: ')) {
-              const data = trimmedLine.slice(6).trim();
-              if (data.startsWith('"0:')) {
-                try {
-                  const text = JSON.parse(data.slice(1));
-                  fullContent += text;
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-
-          if (!isAborted) {
-            setSynthesisDone(fullContent);
-          }
-        } finally {
-          reader.releaseLock();
+        if (!isAborted) {
+          setSynthesisDone(fullContent);
         }
       } catch (err: unknown) {
         if ((err as Error).name === 'AbortError') {

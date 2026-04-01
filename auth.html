@@ -46,8 +46,8 @@
       </div>
     </div>
 
-    <div class="layout">
-      <aside class="sidebar">
+    <div class="layout page-layout">
+      <aside class="sidebar page-sidebar" id="page-sidebar">
         <div class="sidebar-rail">
           <div class="sidebar-brand">OC</div>
           <div class="lang-switch">
@@ -57,21 +57,32 @@
               <span class="lang-toggle-knob">ZH</span>
             </button>
           </div>
-          <a class="nav-icon" href="index.html" aria-label="Workspace">
-            <span class="icon-grid" aria-hidden="true"></span>
-          </a>
-          <a class="nav-icon" href="settings.html" aria-label="Settings">
-            <span class="icon-sliders" aria-hidden="true"></span>
-          </a>
-          <a class="nav-icon" href="friends.html" aria-label="Friends">
-            <span class="icon-users" aria-hidden="true"></span>
-          </a>
-          <a class="nav-icon active" href="auth.html" aria-label="Account">
-            <span class="icon-user" aria-hidden="true"></span>
-          </a>
-          <a class="nav-icon" href="history.html" aria-label="History">
-            <span class="icon-clock" aria-hidden="true"></span>
-          </a>
+          <nav class="sidebar-nav">
+            <a class="sidebar-nav-item" href="index.html">
+              <span class="icon-grid" aria-hidden="true"></span>
+              <span class="sidebar-nav-label" data-i18n="common.navWorkspace"></span>
+            </a>
+            <a class="sidebar-nav-item" href="settings.html">
+              <span class="icon-sliders" aria-hidden="true"></span>
+              <span class="sidebar-nav-label" data-i18n="common.navSettings"></span>
+            </a>
+            <a class="sidebar-nav-item" href="friends.html">
+              <span class="icon-users" aria-hidden="true"></span>
+              <span class="sidebar-nav-label" data-i18n="common.navFriends"></span>
+            </a>
+            <a class="sidebar-nav-item active" href="auth.html">
+              <span class="icon-user" aria-hidden="true"></span>
+              <span class="sidebar-nav-label" data-i18n="common.navAccount"></span>
+            </a>
+            <a class="sidebar-nav-item" href="history.html">
+              <span class="icon-clock" aria-hidden="true"></span>
+              <span class="sidebar-nav-label" data-i18n="common.navHistory"></span>
+            </a>
+          </nav>
+          <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" type="button" aria-label="Collapse sidebar">
+            <span class="sidebar-collapse-icon" aria-hidden="true"></span>
+            <span class="sidebar-nav-label" data-i18n="common.collapseSidebar"></span>
+          </button>
         </div>
       </aside>
 

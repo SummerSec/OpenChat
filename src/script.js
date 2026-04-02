@@ -288,7 +288,6 @@ const I18N = {
       appearanceLabel: "\u5916\u89c8",
       appearanceTitle: "\u4e3b\u9898\u4e0e\u5b57\u4f53",
       themeLabel: "\u4e3b\u9898",
-      themeEarth: "\u5927\u5730\u58a8\u6c34",
       themeSky: "\u5929\u7a7a\u4e4b\u84dd",
       themeLavender: "\u85b0\u8863\u8349\u7d2b",
       themeCream: "\u5976\u6cb9\u6e29\u6696",
@@ -522,7 +521,6 @@ const I18N = {
       appearanceLabel: "Appearance",
       appearanceTitle: "Theme & Font size",
       themeLabel: "Theme",
-      themeEarth: "Earth & Ink",
       themeSky: "Sky Blue",
       themeLavender: "Soft Lavender",
       themeCream: "Warm Cream",
@@ -896,7 +894,8 @@ let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
 
 // Theme initialization
 function initTheme() {
-  const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || "light";
+  let savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || "sky";
+  if (savedTheme === "light") savedTheme = "sky";
   applyTheme(savedTheme);
   // Font size: default 14px, accept both old string values and new numeric values
   const savedFontSize = localStorage.getItem(STORAGE_KEYS.fontSize);

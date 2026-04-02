@@ -1808,6 +1808,23 @@ textarea:focus {
   color: var(--error);
 }
 
+.conversation-item-menu-action--has-submenu {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.conversation-item-submenu {
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--accent-soft);
+  margin: 2px 0;
+}
+
+.conversation-item-submenu .conversation-item-menu-action {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+}
+
 .user-bar {
   position: relative;
   padding-top: 12px;
@@ -3888,4 +3905,64 @@ body.frontend-access-locked #frontend-password-modal {
 
 .think-block[open] .think-toggle-btn {
   color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Print Styles — PDF Export via window.print()
+   ========================================================================== */
+@media print {
+  /* Hide non-content elements */
+  .app-sider,
+  .composer-shell,
+  .chat-header,
+  .chat-header-compact,
+  .suggestion-row,
+  .stream-empty-state,
+  .workspace-stage-copy,
+  .message-actions,
+  .message-copy-btn,
+  .conversation-item-menu,
+  .conversation-item-more,
+  .user-bar,
+  #chat-root {
+    display: none !important;
+  }
+
+  /* Make main area fill the page */
+  body {
+    background: #fff !important;
+    color: #1a1a1a !important;
+  }
+
+  .app-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .message-stream {
+    overflow: visible !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .message-bubble {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .message-bubble.ai-bubble {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+
+  .message-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .message-avatar {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

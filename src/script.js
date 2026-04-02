@@ -28,6 +28,7 @@ import {
   updateMessage,
   Components
 } from "./components/message-card.js";
+import { exportToHtml, exportToImage, exportToPdf } from "./utils/export-utils.mjs";
 
 
 const STORAGE_KEYS = {
@@ -404,10 +405,14 @@ const I18N = {
       saveAction: "\u4fdd\u5b58",
       pinAction: "\u7f6e\u9876",
       unpinAction: "\u53d6\u6d88\u7f6e\u9876",
-      shareAction: "\u5206\u4eab",
+      exportAction: "\u5bfc\u51fa",
+      exportHtml: "\u5bfc\u51fa\u4e3a\u7f51\u9875",
+      exportImage: "\u5bfc\u51fa\u4e3a\u56fe\u7247",
+      exportPdf: "\u5bfc\u51fa\u4e3a PDF",
+      exportSuccess: "\u5bfc\u51fa\u6210\u529f",
+      exportFailed: "\u5bfc\u51fa\u5931\u8d25",
       deleteAction: "\u5220\u9664",
       addAction: "\u65b0\u589e",
-      copiedShare: "\u5df2\u590d\u5236\u4f1a\u8bdd\u5185\u5bb9",
       deletedConversation: "\u5df2\u5220\u9664\u4f1a\u8bdd",
       groupSettingsSaved: "\u5df2\u4fdd\u5b58\u4e3a\u9ed8\u8ba4\u7fa4\u8bbe\u7f6e",
       conversationGroupApplied: "\u5df2\u5e94\u7528\u5230\u5f53\u524d\u4f1a\u8bdd",
@@ -633,10 +638,14 @@ const I18N = {
       saveAction: "Save",
       pinAction: "Pin",
       unpinAction: "Unpin",
-      shareAction: "Share",
+      exportAction: "Export",
+      exportHtml: "Export as HTML",
+      exportImage: "Export as Image",
+      exportPdf: "Export as PDF",
+      exportSuccess: "Export successful",
+      exportFailed: "Export failed",
       deleteAction: "Delete",
       addAction: "Add",
-      copiedShare: "Conversation copied",
       deletedConversation: "Conversation deleted",
       groupSettingsSaved: "Saved as default group settings",
       conversationGroupApplied: "Applied to the current conversation",
@@ -2731,9 +2740,20 @@ function renderConversationList() {
                   <button class="conversation-item-menu-action" data-menu-action="pin" data-menu-index="${index}" type="button">${escapeHtml(
                     t(item.pinned ? "common.unpinAction" : "common.pinAction")
                   )}</button>
-                  <button class="conversation-item-menu-action" data-menu-action="share" data-menu-index="${index}" type="button">${escapeHtml(
-                    t("common.shareAction")
-                  )}</button>
+                  <button class="conversation-item-menu-action conversation-item-menu-action--has-submenu" data-menu-action="export" data-menu-index="${index}" type="button">${escapeHtml(
+                    t("common.exportAction")
+                  )} &#9656;</button>
+                  <div class="conversation-item-submenu" data-submenu-for="${index}" hidden>
+                    <button class="conversation-item-menu-action" data-menu-action="export-html" data-menu-index="${index}" type="button">${escapeHtml(
+                      t("common.exportHtml")
+                    )}</button>
+                    <button class="conversation-item-menu-action" data-menu-action="export-image" data-menu-index="${index}" type="button">${escapeHtml(
+                      t("common.exportImage")
+                    )}</button>
+                    <button class="conversation-item-menu-action" data-menu-action="export-pdf" data-menu-index="${index}" type="button">${escapeHtml(
+                      t("common.exportPdf")
+                    )}</button>
+                  </div>
                   <button class="conversation-item-menu-action conversation-item-menu-action-danger" data-menu-action="delete" data-menu-index="${index}" type="button">${escapeHtml(
                     t("common.deleteAction")
                   )}</button>
@@ -3312,18 +3332,31 @@ async function toggleConversationPin(index) {
   renderHistory();
 }
 
-async function shareConversation(index) {
+async function exportConversation(index, format) {
   const history = getHistoryItems();
   const session = history[index];
   if (!session) return;
-  const payload = [getConversationTitle(session), session.prompt || "", session.mergedAnswer || ""]
-    .filter(Boolean)
-    .join("\n\n");
+  const title = getConversationTitle(session);
+  const messages = buildConversationFromSession(session);
+  const exportOptions = {
+    title,
+    userName: currentLanguage === "zh-CN" ? "\u6211" : "You",
+    synthesisLabel: currentLanguage === "zh-CN" ? "\u6574\u5408" : "Merged"
+  };
+
   try {
-    await navigator.clipboard.writeText(payload);
-    setRuntimeStatus(t("common.copiedShare"));
-  } catch {
-    setRuntimeStatus(payload);
+    if (format === "html") {
+      exportToHtml(messages, exportOptions);
+      setRuntimeStatus(t("common.exportSuccess"));
+    } else if (format === "image") {
+      await exportToImage(messages, exportOptions);
+      setRuntimeStatus(t("common.exportSuccess"));
+    } else if (format === "pdf") {
+      exportToPdf(messages, exportOptions);
+    }
+  } catch (err) {
+    console.error("Export failed:", err);
+    setRuntimeStatus(t("common.exportFailed"));
   }
   expandedHistoryIndex = null;
   renderConversationList();
@@ -4360,8 +4393,23 @@ function bindWorkspaceEvents() {
         void toggleConversationPin(index);
         return;
       }
-      if (action === "share") {
-        shareConversation(index);
+      if (action === "export") {
+        const submenu = menuAction.closest(".conversation-item-menu")?.querySelector(`[data-submenu-for="${index}"]`);
+        if (submenu) {
+          submenu.hidden = !submenu.hidden;
+        }
+        return;
+      }
+      if (action === "export-html") {
+        void exportConversation(index, "html");
+        return;
+      }
+      if (action === "export-image") {
+        void exportConversation(index, "image");
+        return;
+      }
+      if (action === "export-pdf") {
+        void exportConversation(index, "pdf");
         return;
       }
       if (action === "delete") {

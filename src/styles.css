@@ -40,46 +40,43 @@
 
 /*
    DESIGN PRINCIPLES:
-   - Warm paper-like neutrals (not cold grays or stark whites)
-   - Single distinctive accent (ochre/terracotta - warm earth)
+   - Clean, airy sky-blue default aesthetic
    - High contrast for readability without harshness
-   - Organic, editorial feel vs synthetic tech aesthetic
-   - Avoid: blue-purple gradients, neon accents, glassmorphism clichés
-   - Inspired by fine paper, letterpress, and editorial design
+   - Multiple theme options for user preference
 */
 
 /* ==========================================================================
-   Earth & Ink Light Theme - Warm paper aesthetic
+   Sky Blue Light Theme (default) - Clean blue aesthetic
    ========================================================================== */
 :root {
-  /* Core neutrals - warm paper tones */
-  --bg-primary: #faf7f2;
-  --bg-secondary: #f0ebe3;
-  --bg-panel: rgba(255, 254, 251, 0.96);
-  --bg-panel-solid: #fffefb;
-  --border: #e0d8ce;
-  --border-subtle: rgba(44, 36, 32, 0.06);
+  /* Core neutrals - cool sky tones */
+  --bg-primary: #f0f9ff;
+  --bg-secondary: #e0f2fe;
+  --bg-panel: rgba(255, 255, 255, 0.96);
+  --bg-panel-solid: #ffffff;
+  --border: #bae6fd;
+  --border-subtle: rgba(56, 189, 248, 0.08);
 
-  /* Text - ink tones (not pure black) */
-  --text-primary: #2c2420;
-  --text-secondary: #5a524c;
-  --text-muted: #8b8178;
+  /* Text - deep blue tones */
+  --text-primary: #0c4a6e;
+  --text-secondary: #0369a1;
+  --text-muted: #0ea5e9;
 
-  /* Accent - Ochre Terracotta (warm earth, not blue/purple) */
-  --accent: #b45f3c;
-  --accent-hover: #8f4a2d;
-  --accent-soft: rgba(180, 95, 60, 0.1);
-  --accent-glow: rgba(180, 95, 60, 0.15);
+  /* Accent - Sky blue */
+  --accent: #0284c7;
+  --accent-hover: #0369a1;
+  --accent-soft: rgba(2, 132, 199, 0.1);
+  --accent-glow: rgba(2, 132, 199, 0.15);
 
-  /* Semantic colors - muted earth tones */
-  --success-soft: rgba(74, 124, 89, 0.1);
-  --success: #3d6b4e;
-  --warning-soft: rgba(180, 140, 60, 0.1);
-  --warning: #9a7530;
-  --error-soft: rgba(180, 80, 70, 0.1);
-  --error: #a05048;
+  /* Semantic colors */
+  --success-soft: rgba(34, 197, 94, 0.1);
+  --success: #16a34a;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+  --warning: #d97706;
+  --error-soft: rgba(239, 68, 68, 0.1);
+  --error: #dc2626;
 
-  /* Typography - refined humanist sans + elegant serif */
+  /* Typography */
   --font-body: "Inter", "Source Sans 3", system-ui, -apple-system, sans-serif;
   --font-display: "Playfair Display", "Source Serif 4", Georgia, serif;
 
@@ -91,40 +88,40 @@
   --radius-md: 14px;
   --radius-sm: 10px;
 
-  /* Shadows - soft organic (no harsh tech shadows) */
-  --shadow-sm: 0 2px 8px rgba(44, 36, 32, 0.04), 0 1px 2px rgba(44, 36, 32, 0.02);
-  --shadow-md: 0 4px 16px rgba(44, 36, 32, 0.06), 0 2px 4px rgba(44, 36, 32, 0.03);
-  --shadow-lg: 0 8px 32px rgba(44, 36, 32, 0.08), 0 4px 8px rgba(44, 36, 32, 0.04);
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(12, 74, 110, 0.04), 0 1px 2px rgba(12, 74, 110, 0.02);
+  --shadow-md: 0 4px 16px rgba(12, 74, 110, 0.06), 0 2px 4px rgba(12, 74, 110, 0.03);
+  --shadow-lg: 0 8px 32px rgba(12, 74, 110, 0.08), 0 4px 8px rgba(12, 74, 110, 0.04);
 
-  /* shadcn/ui CSS Variables - mapped to our theme */
+  /* shadcn/ui CSS Variables - mapped to sky theme */
   --radius: 0.875rem;
-  --background: 40 33% 96%;
-  --foreground: 24 14% 15%;
-  --card: 40 50% 99%;
-  --card-foreground: 24 14% 15%;
-  --popover: 40 50% 99%;
-  --popover-foreground: 24 14% 15%;
-  --primary: 18 52% 47%;
-  --primary-foreground: 40 33% 96%;
-  --secondary: 30 18% 91%;
-  --secondary-foreground: 24 14% 25%;
-  --muted: 30 15% 88%;
-  --muted-foreground: 24 10% 52%;
-  --accent: 18 52% 47%;
-  --accent-foreground: 40 33% 96%;
-  --destructive: 6 60% 45%;
-  --destructive-foreground: 40 33% 96%;
-  --border: 30 18% 84%;
-  --input: 30 18% 84%;
-  --ring: 18 52% 47%;
+  --background: 204 100% 97%;
+  --foreground: 204 80% 24%;
+  --card: 0 0% 100%;
+  --card-foreground: 204 80% 24%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 204 80% 24%;
+  --primary: 201 96% 39%;
+  --primary-foreground: 204 100% 97%;
+  --secondary: 204 94% 94%;
+  --secondary-foreground: 204 80% 30%;
+  --muted: 204 80% 90%;
+  --muted-foreground: 204 60% 45%;
+  --accent: 201 96% 39%;
+  --accent-foreground: 204 100% 97%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 204 100% 97%;
+  --border: 199 89% 86%;
+  --input: 199 89% 86%;
+  --ring: 201 96% 39%;
 
-  /* Ambient backgrounds - subtle warm glow */
-  --ambient-gradient: radial-gradient(ellipse at top right, rgba(180, 95, 60, 0.03) 0%, transparent 40%),
-                      radial-gradient(ellipse at bottom left, rgba(139, 129, 120, 0.03) 0%, transparent 40%);
+  /* Ambient backgrounds - subtle sky glow */
+  --ambient-gradient: radial-gradient(ellipse at top right, rgba(2, 132, 199, 0.05) 0%, transparent 40%),
+                      radial-gradient(ellipse at bottom left, rgba(56, 189, 248, 0.04) 0%, transparent 40%);
 }
 
 /* ==========================================================================
-   Earth & Ink Dark Theme - Warm dark aesthetic (not cold blue-gray)
+   Warm Dark Theme
    ========================================================================== */
 [data-theme="dark"] {
   --bg-primary: #1a1815;
@@ -401,25 +398,6 @@
 
 /* Legacy variables for backward compatibility */
 :root,
-[data-theme="light"] {
-  --app-bg: var(--bg-primary);
-  --panel: var(--bg-panel);
-  --panel-strong: var(--bg-panel-solid);
-  --line: var(--border);
-  --line-soft: var(--border-subtle);
-  --text: var(--text-primary);
-  --muted: var(--text-secondary);
-  --caption: var(--text-muted);
-  --blue: var(--accent);
-  --blue-deep: var(--accent-hover);
-  --blue-soft: var(--accent-soft);
-  --green-soft: var(--success-soft);
-  --orange-soft: var(--warning-soft);
-  --purple-soft: var(--accent-soft);
-  --font-sans: var(--font-body);
-  --font-display: var(--font-display);
-}
-
 [data-theme="dark"] {
   --app-bg: var(--bg-primary);
   --panel: var(--bg-panel);
@@ -1029,10 +1007,6 @@ a {
   height: 18px;
   border-radius: 4px;
   border: 1px solid var(--border);
-}
-
-.theme-setting-icon.earth {
-  background: linear-gradient(135deg, #faf7f2 0%, #e0d8ce 100%);
 }
 
 .theme-setting-icon.dark {

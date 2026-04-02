@@ -586,6 +586,10 @@ const I18N = {
       exportPdf: "\u5bfc\u51fa\u4e3a PDF",
       exportSuccess: "\u5bfc\u51fa\u6210\u529f",
       exportFailed: "\u5bfc\u51fa\u5931\u8d25",
+      exportConfig: "\u5bfc\u51fa\u914d\u7f6e",
+      importConfig: "\u5bfc\u5165\u914d\u7f6e",
+      importConfigSuccess: "\u5bfc\u5165\u6210\u529f\uff1a{0} \u4e2a\u6a21\u578b\uff0c{1} \u4e2a\u7fa4\u53cb",
+      importConfigFailed: "\u5bfc\u5165\u5931\u8d25\uff1a\u6587\u4ef6\u683c\u5f0f\u65e0\u6548",
       deleteAction: "\u5220\u9664",
       addAction: "\u65b0\u589e",
       deletedConversation: "\u5df2\u5220\u9664\u4f1a\u8bdd",
@@ -819,6 +823,10 @@ const I18N = {
       exportPdf: "Export as PDF",
       exportSuccess: "Export successful",
       exportFailed: "Export failed",
+      exportConfig: "Export Config",
+      importConfig: "Import Config",
+      importConfigSuccess: "Imported: {0} models, {1} friends",
+      importConfigFailed: "Import failed: invalid file format",
       deleteAction: "Delete",
       addAction: "Add",
       deletedConversation: "Conversation deleted",
@@ -1031,6 +1039,8 @@ const modelCount = document.getElementById("model-count");
 const configGrid = document.getElementById("config-grid");
 const addCustomModelButton = document.getElementById("add-custom-model");
 const testEnabledModelsButton = document.getElementById("test-enabled-models");
+const exportConfigButton = document.getElementById("export-config");
+const importConfigButton = document.getElementById("import-config");
 const friendGrid = document.getElementById("friend-grid");
 const addFriendButton = document.getElementById("add-friend");
 const accountEmail = document.getElementById("account-email");
@@ -1205,19 +1215,34 @@ function cloneGroupSettings(settings = {}) {
   };
 }
 
+const FRIEND_EMOJI_POOL = [
+  "\u{1F916}", "\u{1F9E0}", "\u{2728}", "\u{26A1}", "\u{1F680}", "\u{1F31F}", "\u{1F525}",
+  "\u{1F4A1}", "\u{1F30D}", "\u{1F3AF}", "\u{1F9D9}", "\u{1F47E}", "\u{1F34E}", "\u{1F48E}",
+  "\u{1F308}", "\u{2604}\u{FE0F}", "\u{1F54A}\u{FE0F}", "\u{1F340}", "\u{1F3B2}", "\u{1F9CA}"
+];
+
+function pickRandomEmoji() {
+  return FRIEND_EMOJI_POOL[Math.floor(Math.random() * FRIEND_EMOJI_POOL.length)];
+}
+
 function normalizeModelConfig(item = {}) {
-  return {
+  const base = {
     avatar: "",
     thinkingEnabled: normalizeThinkingEnabled(item.thinkingEnabled, false),
     ...item
   };
+  if (!base.avatar && base.id) {
+    const defaultModel = DEFAULT_MODELS.find((m) => m.id === base.id);
+    if (defaultModel?.avatar) base.avatar = defaultModel.avatar;
+  }
+  return base;
 }
 
 function normalizeFriendProfile(item = {}, models = modelConfigs) {
   return {
     id: item.id || `friend-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: item.name || (currentLanguage === "zh-CN" ? "\u7fa4\u53cb" : "Friend"),
-    avatar: item.avatar || "",
+    avatar: item.avatar || pickRandomEmoji(),
     modelConfigId: item.modelConfigId || models[0]?.id || "",
     systemPrompt: String(item.systemPrompt || getDefaultFriendSystemPrompt(item.name || "")),
     enabled: item.enabled !== false,
@@ -1738,19 +1763,12 @@ function getActiveModels() {
   return getOrderedModelConfigs().filter((item) => item.enabled);
 }
 
-const FRIEND_EMOJI_POOL = [
-  "\u{1F916}", "\u{1F9E0}", "\u{2728}", "\u{26A1}", "\u{1F680}", "\u{1F31F}", "\u{1F525}",
-  "\u{1F4A1}", "\u{1F30D}", "\u{1F3AF}", "\u{1F9D9}", "\u{1F47E}", "\u{1F34E}", "\u{1F48E}",
-  "\u{1F308}", "\u{2604}\u{FE0F}", "\u{1F54A}\u{FE0F}", "\u{1F340}", "\u{1F3B2}", "\u{1F9CA}"
-];
-
 function createFriendProfile() {
   const friendCount = friendProfiles.length + 1;
-  const randomEmoji = FRIEND_EMOJI_POOL[Math.floor(Math.random() * FRIEND_EMOJI_POOL.length)];
   return {
     id: `friend-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: currentLanguage === "zh-CN" ? `\u7fa4\u53cb ${friendCount}` : `Friend ${friendCount}`,
-    avatar: randomEmoji,
+    avatar: pickRandomEmoji(),
     modelConfigId: getOrderedModelConfigs()[0]?.id || "",
     systemPrompt: getDefaultFriendSystemPrompt(
       currentLanguage === "zh-CN" ? `\u7fa4\u53cb ${friendCount}` : `Friend ${friendCount}`
@@ -2019,23 +2037,23 @@ function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = 
   const bgColor = nameToColor(name || fallback || provider || "AI");
 
   if (avatarValue) {
-    if (/^(https?:\/\/|\/|image\/)/i.test(avatarValue)) {
+    if (/^(https?:\/\/|\/|data:image\/)/i.test(avatarValue)) {
       return `
         <img
           class="provider-icon provider-icon-custom"
           src="${escapeHtml(avatarValue)}"
           alt="${escapeHtml(name || provider || fallback)}"
           loading="lazy"
-          onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-fallback avatar-fallback-custom', textContent: '${fallbackLabel}' }))"
+          onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-fallback', textContent: '${fallbackLabel}' }))"
         />
       `;
     }
-    return `<span class="avatar-fallback avatar-fallback-custom">${escapeHtml(
+    return `<span class="avatar-fallback avatar-fallback-emoji" style="background:${bgColor}">${escapeHtml(
       Array.from(avatarValue).slice(0, 2).join("")
     )}</span>`;
   }
 
-  return `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;">${fallbackLabel}</span>`;
+  return `<span class="avatar-fallback" style="background:${bgColor}">${fallbackLabel}</span>`;
 }
 
 function apiRequest(path, options = {}) {
@@ -3560,10 +3578,73 @@ async function exportConversation(index, format) {
   renderConversationList();
 }
 
-/**
- * Copy a single message to clipboard
- * @param {Object} message - Message object with content
- */
+function exportConfig() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    models: modelConfigs,
+    friends: friendProfiles,
+    groupSettings: defaultGroupSettings
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  a.download = `OpenChat-config-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setRuntimeStatus(t("common.exportSuccess"));
+}
+
+function importConfig() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const models = Array.isArray(data.models) ? data.models : [];
+      const friends = Array.isArray(data.friends) ? data.friends : [];
+      if (!models.length && !friends.length) {
+        setRuntimeStatus(t("common.importConfigFailed"));
+        return;
+      }
+      if (models.length) {
+        modelConfigs = normalizeModelConfigs(models);
+        writeScopedJson(STORAGE_KEYS.models, modelConfigs);
+        await syncModelConfigsToBackend();
+      }
+      if (friends.length) {
+        friendProfiles = normalizeFriendProfiles(friends, modelConfigs);
+        writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
+        await syncFriendProfilesToBackend();
+      }
+      if (data.groupSettings && typeof data.groupSettings === "object") {
+        defaultGroupSettings = normalizeGroupSettings(data.groupSettings, friendProfiles);
+        writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
+        await syncGroupSettingsToBackend();
+      }
+      rerenderAll();
+      const msg = t("common.importConfigSuccess")
+        .replace("{0}", String(models.length))
+        .replace("{1}", String(friends.length));
+      setRuntimeStatus(msg);
+    } catch (err) {
+      console.error("Import config failed:", err);
+      setRuntimeStatus(t("common.importConfigFailed"));
+    }
+  };
+  input.click();
+}
+
 /**
  * Copy text to clipboard using fallback method
  * @param {string} text - Text to copy
@@ -4832,6 +4913,9 @@ function bindSettingsEvents() {
     reader.readAsDataURL(file);
     input.value = "";
   });
+
+  exportConfigButton?.addEventListener("click", () => exportConfig());
+  importConfigButton?.addEventListener("click", () => importConfig());
 
   addCustomModelButton?.addEventListener("click", () => {
     const nextModel = createCustomModelConfig();

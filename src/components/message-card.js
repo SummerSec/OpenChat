@@ -79,17 +79,34 @@ export function escapeHtml(text) {
  * @param {string} props.variant - 'user' | 'assistant' | 'synthesis'
  * @returns {HTMLElement}
  */
+function nameToColor(name = "") {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
 export function Avatar({ name, fallback, avatar, variant = "assistant" }) {
   const displayFallback = fallback || name?.slice(0, 2).toUpperCase() || "AI";
 
+  if (avatar) {
+    return h(
+      "div",
+      { className: `message-avatar avatar-${variant}` },
+      [h("img", { src: avatar, alt: name, className: "avatar-image" })]
+    );
+  }
+
+  const bgColor = nameToColor(name || fallback || "AI");
   return h(
     "div",
-    { className: `message-avatar avatar-${variant}` },
-    [
-      avatar
-        ? h("img", { src: avatar, alt: name, className: "avatar-image" })
-        : h("span", { className: "avatar-fallback" }, [displayFallback])
-    ]
+    {
+      className: `message-avatar avatar-${variant}`,
+      style: { background: bgColor, border: "none" }
+    },
+    [h("span", { className: "avatar-fallback", style: { color: "#fff" } }, [displayFallback])]
   );
 }
 

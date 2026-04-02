@@ -1997,12 +1997,22 @@ function getProviderIconKey(name = "", provider = "") {
   return match?.[1] || "newapi";
 }
 
+function nameToColor(name = "") {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
 function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = "") {
   const avatarValue = String(avatar || "").trim();
   const fallbackLabel = escapeHtml(String(fallback || name || provider || "AI").slice(0, 2).toUpperCase());
+  const bgColor = nameToColor(name || fallback || provider || "AI");
 
   if (avatarValue) {
-    if (/^(https?:\/\/|\/|data:image\/)/i.test(avatarValue)) {
+    if (/^(https?:\/\/|\/|image\/)/i.test(avatarValue)) {
       return `
         <img
           class="provider-icon provider-icon-custom"
@@ -2018,7 +2028,7 @@ function renderProviderIcon(name = "", provider = "", fallback = "AI", avatar = 
     )}</span>`;
   }
 
-  return `<span class="avatar-fallback">${fallbackLabel}</span>`;
+  return `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;">${fallbackLabel}</span>`;
 }
 
 function apiRequest(path, options = {}) {

@@ -43,6 +43,20 @@ function escapeHtml(text) {
 }
 
 /**
+ * Generate a consistent HSL background color from a name string.
+ * @param {string} name
+ * @returns {string}
+ */
+function nameToColor(name = "") {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+/**
  * Trigger a file download from a Blob.
  * @param {Blob} blob
  * @param {string} filename
@@ -89,9 +103,10 @@ function buildMessageHtml(msg, { userName = "You", synthesisLabel = "Merged" } =
   const isSynthesis = msg.kind === "synthesis";
   const name = msg.name || "AI";
   const avatarInitials = (msg.avatar ? "" : name.slice(0, 2).toUpperCase());
+  const bgColor = nameToColor(name);
   const avatarHtml = msg.avatar
     ? `<img src="${escapeHtml(msg.avatar)}" alt="${escapeHtml(name)}" class="avatar-image">`
-    : `<span class="avatar-fallback">${escapeHtml(avatarInitials)}</span>`;
+    : `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;">${escapeHtml(avatarInitials)}</span>`;
   const variant = isSynthesis ? "synthesis" : "assistant";
   const roleLabel = isSynthesis ? synthesisLabel : "AI";
   const bubbleClass = isSynthesis ? "message-bubble ai-bubble synthesis-bubble" : "message-bubble ai-bubble";

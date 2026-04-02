@@ -1134,6 +1134,16 @@ function applyFontSize(size) {
   if (input) input.value = sizeNum;
 }
 
+const FRIEND_EMOJI_POOL = [
+  "\u{1F916}", "\u{1F9E0}", "\u{2728}", "\u{26A1}", "\u{1F680}", "\u{1F31F}", "\u{1F525}",
+  "\u{1F4A1}", "\u{1F30D}", "\u{1F3AF}", "\u{1F9D9}", "\u{1F47E}", "\u{1F34E}", "\u{1F48E}",
+  "\u{1F308}", "\u{2604}\u{FE0F}", "\u{1F54A}\u{FE0F}", "\u{1F340}", "\u{1F3B2}", "\u{1F9CA}"
+];
+
+function pickRandomEmoji() {
+  return FRIEND_EMOJI_POOL[Math.floor(Math.random() * FRIEND_EMOJI_POOL.length)];
+}
+
 let frontendPasswordHash = "";
 let frontendAccessBlocked = false;
 let modelTestState = {};
@@ -1213,16 +1223,6 @@ function cloneGroupSettings(settings = {}) {
     integrationExpertIds: Array.isArray(settings.integrationExpertIds) ? [...settings.integrationExpertIds] : [],
     expertOnlyMode: Boolean(settings.expertOnlyMode)
   };
-}
-
-const FRIEND_EMOJI_POOL = [
-  "\u{1F916}", "\u{1F9E0}", "\u{2728}", "\u{26A1}", "\u{1F680}", "\u{1F31F}", "\u{1F525}",
-  "\u{1F4A1}", "\u{1F30D}", "\u{1F3AF}", "\u{1F9D9}", "\u{1F47E}", "\u{1F34E}", "\u{1F48E}",
-  "\u{1F308}", "\u{2604}\u{FE0F}", "\u{1F54A}\u{FE0F}", "\u{1F340}", "\u{1F3B2}", "\u{1F9CA}"
-];
-
-function pickRandomEmoji() {
-  return FRIEND_EMOJI_POOL[Math.floor(Math.random() * FRIEND_EMOJI_POOL.length)];
 }
 
 function normalizeModelConfig(item = {}) {

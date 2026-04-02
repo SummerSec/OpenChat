@@ -586,9 +586,12 @@ const I18N = {
       exportPdf: "\u5bfc\u51fa\u4e3a PDF",
       exportSuccess: "\u5bfc\u51fa\u6210\u529f",
       exportFailed: "\u5bfc\u51fa\u5931\u8d25",
-      exportConfig: "\u5bfc\u51fa\u914d\u7f6e",
-      importConfig: "\u5bfc\u5165\u914d\u7f6e",
-      importConfigSuccess: "\u5bfc\u5165\u6210\u529f\uff1a{0} \u4e2a\u6a21\u578b\uff0c{1} \u4e2a\u7fa4\u53cb",
+      exportModels: "\u5bfc\u51fa\u6a21\u578b",
+      importModels: "\u5bfc\u5165\u6a21\u578b",
+      exportFriends: "\u5bfc\u51fa\u7fa4\u53cb",
+      importFriends: "\u5bfc\u5165\u7fa4\u53cb",
+      importModelsSuccess: "\u5bfc\u5165\u6210\u529f\uff1a{0} \u4e2a\u6a21\u578b",
+      importFriendsSuccess: "\u5bfc\u5165\u6210\u529f\uff1a{0} \u4e2a\u7fa4\u53cb",
       importConfigFailed: "\u5bfc\u5165\u5931\u8d25\uff1a\u6587\u4ef6\u683c\u5f0f\u65e0\u6548",
       deleteAction: "\u5220\u9664",
       addAction: "\u65b0\u589e",
@@ -823,9 +826,12 @@ const I18N = {
       exportPdf: "Export as PDF",
       exportSuccess: "Export successful",
       exportFailed: "Export failed",
-      exportConfig: "Export Config",
-      importConfig: "Import Config",
-      importConfigSuccess: "Imported: {0} models, {1} friends",
+      exportModels: "Export Models",
+      importModels: "Import Models",
+      exportFriends: "Export Friends",
+      importFriends: "Import Friends",
+      importModelsSuccess: "Imported: {0} models",
+      importFriendsSuccess: "Imported: {0} friends",
       importConfigFailed: "Import failed: invalid file format",
       deleteAction: "Delete",
       addAction: "Add",
@@ -1039,8 +1045,10 @@ const modelCount = document.getElementById("model-count");
 const configGrid = document.getElementById("config-grid");
 const addCustomModelButton = document.getElementById("add-custom-model");
 const testEnabledModelsButton = document.getElementById("test-enabled-models");
-const exportConfigButton = document.getElementById("export-config");
-const importConfigButton = document.getElementById("import-config");
+const exportModelsButton = document.getElementById("export-models");
+const importModelsButton = document.getElementById("import-models");
+const exportFriendsButton = document.getElementById("export-friends");
+const importFriendsButton = document.getElementById("import-friends");
 const friendGrid = document.getElementById("friend-grid");
 const addFriendButton = document.getElementById("add-friend");
 const accountEmail = document.getElementById("account-email");
@@ -3578,30 +3586,66 @@ async function exportConversation(index, format) {
   renderConversationList();
 }
 
-function exportConfig() {
-  const data = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    models: modelConfigs,
-    friends: friendProfiles,
-    groupSettings: defaultGroupSettings
-  };
+function downloadJson(data, filename) {
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const d = new Date();
-  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  a.download = `OpenChat-config-${stamp}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function getDateStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function exportModels() {
+  const data = { version: 1, type: "models", exportedAt: new Date().toISOString(), models: modelConfigs };
+  downloadJson(data, `OpenChat-models-${getDateStamp()}.json`);
   setRuntimeStatus(t("common.exportSuccess"));
 }
 
-function importConfig() {
+function exportFriends() {
+  const data = { version: 1, type: "friends", exportedAt: new Date().toISOString(), friends: friendProfiles, groupSettings: defaultGroupSettings };
+  downloadJson(data, `OpenChat-friends-${getDateStamp()}.json`);
+  setRuntimeStatus(t("common.exportSuccess"));
+}
+
+function importModels() {
+  pickJsonFile(async (data) => {
+    const models = Array.isArray(data.models) ? data.models : [];
+    if (!models.length) { setRuntimeStatus(t("common.importConfigFailed")); return; }
+    modelConfigs = normalizeModelConfigs(models);
+    writeScopedJson(STORAGE_KEYS.models, modelConfigs);
+    await syncModelConfigsToBackend();
+    rerenderAll();
+    setRuntimeStatus(t("common.importModelsSuccess").replace("{0}", String(models.length)));
+  });
+}
+
+function importFriends() {
+  pickJsonFile(async (data) => {
+    const friends = Array.isArray(data.friends) ? data.friends : [];
+    if (!friends.length) { setRuntimeStatus(t("common.importConfigFailed")); return; }
+    friendProfiles = normalizeFriendProfiles(friends, modelConfigs);
+    writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
+    await syncFriendProfilesToBackend();
+    if (data.groupSettings && typeof data.groupSettings === "object") {
+      defaultGroupSettings = normalizeGroupSettings(data.groupSettings, friendProfiles);
+      writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
+      await syncGroupSettingsToBackend();
+    }
+    rerenderAll();
+    setRuntimeStatus(t("common.importFriendsSuccess").replace("{0}", String(friends.length)));
+  });
+}
+
+function pickJsonFile(callback) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".json";
@@ -3609,36 +3653,10 @@ function importConfig() {
     const file = input.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      const models = Array.isArray(data.models) ? data.models : [];
-      const friends = Array.isArray(data.friends) ? data.friends : [];
-      if (!models.length && !friends.length) {
-        setRuntimeStatus(t("common.importConfigFailed"));
-        return;
-      }
-      if (models.length) {
-        modelConfigs = normalizeModelConfigs(models);
-        writeScopedJson(STORAGE_KEYS.models, modelConfigs);
-        await syncModelConfigsToBackend();
-      }
-      if (friends.length) {
-        friendProfiles = normalizeFriendProfiles(friends, modelConfigs);
-        writeScopedJson(STORAGE_KEYS.friends, friendProfiles);
-        await syncFriendProfilesToBackend();
-      }
-      if (data.groupSettings && typeof data.groupSettings === "object") {
-        defaultGroupSettings = normalizeGroupSettings(data.groupSettings, friendProfiles);
-        writeScopedJson(STORAGE_KEYS.groupSettings, defaultGroupSettings);
-        await syncGroupSettingsToBackend();
-      }
-      rerenderAll();
-      const msg = t("common.importConfigSuccess")
-        .replace("{0}", String(models.length))
-        .replace("{1}", String(friends.length));
-      setRuntimeStatus(msg);
+      const data = JSON.parse(await file.text());
+      await callback(data);
     } catch (err) {
-      console.error("Import config failed:", err);
+      console.error("Import failed:", err);
       setRuntimeStatus(t("common.importConfigFailed"));
     }
   };
@@ -4914,8 +4932,10 @@ function bindSettingsEvents() {
     input.value = "";
   });
 
-  exportConfigButton?.addEventListener("click", () => exportConfig());
-  importConfigButton?.addEventListener("click", () => importConfig());
+  exportModelsButton?.addEventListener("click", () => exportModels());
+  importModelsButton?.addEventListener("click", () => importModels());
+  exportFriendsButton?.addEventListener("click", () => exportFriends());
+  importFriendsButton?.addEventListener("click", () => importFriends());
 
   addCustomModelButton?.addEventListener("click", () => {
     const nextModel = createCustomModelConfig();

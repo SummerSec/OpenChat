@@ -10,7 +10,7 @@ workspace-home.png
 public/
 .worktrees/
 .worktrees/**
-docs/superpowers/
+docs/superpowers/**
 openchat.local-models.json
 nodemoduls/
 config.toml

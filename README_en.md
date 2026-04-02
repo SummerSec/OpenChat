@@ -2,225 +2,182 @@
 
 [中文](./README.md)
 
-OpenChat is an open-source multi-model AI group chat workspace. Send the same message to multiple AI friends simultaneously, compare their answers side by side in a unified interface, and let an AI integration expert generate a synthesized reply.
+OpenChat is a multi-model AI collaboration workspace. You can send the same prompt to multiple models at the same time, compare their responses in one place, and let a designated AI synthesize the final answer. It works well for solution comparison, group-style discussion, role-based collaboration, and conclusion merging.
 
-## Features
+## Live Demo
 
-- **Multi-Model Group Chat** — Send one message to multiple AI friends at once with real-time streaming responses
-- **AI Integration Expert** — Designate a friend as the integration expert to automatically synthesize all responses into a unified conclusion
-- **Expert-Only Mode** — Skip regular friends and chat directly with the integration expert, with full multi-turn context support
-- **Markdown Rendering** — Real-time Streamdown-based Markdown with code highlighting, math formulas, Mermaid diagrams, and CJK optimization
-- **Reasoning Collapse** — Auto-detects `<think>` tags and `reasoning_content`, expands during streaming and collapses on completion
-- **Copy Button** — One-click copy on all friend messages after generation completes
-- **Multi-Turn Conversations** — Each friend maintains independent conversation history for follow-up questions
-- **Group Management** — Freely choose which friends participate in each conversation, with shared system prompts
-- **Conversation History** — Save, rename, pin, share, and delete past conversations
-- **Bilingual UI** — Chinese / English toggle
-- **Dual Runtime Modes** — Pure frontend mode (localStorage) or backend mode (Node.js server persistence)
-- **Password Gate** — Optional MD5 password protection for public deployments
-- **Mock Fallback** — Auto-uses simulated responses when API keys are not configured, keeping the UI functional
+- Demo: https://openchat.sumsec.me/
 
-## Tech Stack
+## Core Features
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Vanilla JS + React 19 (hybrid rendering) |
-| Styling | Tailwind CSS v4 |
-| Components | shadcn/ui + AI Elements |
-| State | Zustand |
-| Build | Vite |
-| Backend | Node.js (native HTTP, no framework) |
-| AI SDK | Vercel AI SDK |
-| Markdown | Streamdown (streaming renderer) |
-| Testing | Node built-in test runner |
+- **Parallel multi-model chat**: Send one prompt to multiple AI friends at once and review their answers side by side.
+- **AI synthesis expert**: Assign one friend as the synthesis role to merge multi-model outputs into a single conclusion.
+- **Friend orchestration and role setup**: Configure each AI friend with its own model, avatar, description, and system prompt.
+- **Group settings**: Manage shared system prompts, member selection, and platform capability preferences at the conversation level.
+- **Streaming message rendering**: View responses as they are generated, which works especially well for long text, code blocks, and step-by-step output.
+- **Markdown / code highlight / Mermaid / math**: Enhanced rendering for AI-generated content so complex replies stay readable.
+- **Reasoning collapse**: Automatically folds `<think>` and reasoning content to reduce noise in the main chat view.
+- **Conversation history**: Save, browse, and manage previous sessions for follow-up questions and review.
+- **Dual runtime modes**: Supports both frontend-only mode and Node.js backend mode for lightweight deployment or server-side persistence.
+- **Model configuration center**: Manage provider, model, base URL, API key, and enabled state in one place.
+- **Themes / font size / bilingual UI**: Includes multiple themes, adjustable font size, and Chinese/English interface switching.
+- **Frontend access password**: Adds a lightweight access gate for public deployments.
 
-## Getting Started
+## Screenshots
 
-### Install Dependencies
+### 1. Workspace: multi-model chat and synthesized answers
+
+![OpenChat Workspace](./docs/images/workspace-main.jpg)
+
+### 2. Settings: runtime mode, theme, and model configuration
+
+![OpenChat Settings](./docs/images/settings-main.jpg)
+
+### 3. Friends: AI role setup and prompt configuration
+
+![OpenChat Friends](./docs/images/friends-main.jpg)
+
+## Pages
+
+| Page | Path | Description |
+|---|---|---|
+| Workspace | `index.html` | Multi-model chat, synthesized answers, and streaming message flow |
+| Settings | `settings.html` | Runtime mode, theme, font size, and model configuration |
+| Friends | `friends.html` | AI friend management, role prompts, and model binding |
+| Account | `auth.html` | Local account registration and account display |
+| History | `history.html` | Conversation history browsing and management |
+
+## Runtime Modes
+
+### Frontend mode
+
+- All data is stored in browser `localStorage`
+- The browser calls model provider APIs directly
+- Best for local use, static hosting, and quick deployment
+
+### Backend mode
+
+- A Node.js server provides `/api/*` routes
+- Data is persisted to `.data/openchat-db.json`
+- API keys are managed on the server
+- Better for long-term use or centralized data storage
+
+## Quick Start
+
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-### Frontend Development
+### Start the frontend dev server
 
 ```bash
 npm run dev
 ```
 
-Open `http://127.0.0.1:4173` in your browser.
+Visit: `http://127.0.0.1:4173`
 
-### Backend Development
+### Start the backend server
 
 ```bash
 npm run dev:server
 ```
 
-Open `http://127.0.0.1:8787` in your browser.
+Visit: `http://127.0.0.1:8787`
 
-### Build
+### Build output
 
 ```bash
 npm run build
 npm run preview
 ```
 
-### Run Tests
+### Run tests
 
 ```bash
-# Full test suite
 npm test
 
-# Single test file
+# Example single test file
 node --test src/__tests__/frontend-auth.test.mjs
-
-# Filter by name
-node --test --test-name-pattern="frontend password" src/__tests__/frontend-auth.test.mjs
 ```
 
-## Pages
+## Common Commands
 
-| Page | Path | Description |
-|------|------|-------------|
-| Main Workspace | `index.html` | Multi-friend chat UI, message sending, synthesis replies |
-| Model Settings | `settings.html` | Model providers, API keys, base URLs, runtime mode |
-| Friend Management | `friends.html` | Add/edit AI friends, bind models, set system prompts |
-| Account Registration | `auth.html` | Local account registration |
-| Conversation History | `history.html` | Browse and manage saved conversations |
+```bash
+npm install          # Install dependencies
+npm run dev          # Start frontend dev server
+npm run dev:server   # Start Node backend server
+npm run build        # Build dist/
+npm run preview      # Preview the build output
+npm test             # Run tests
+npm run start        # Start backend server
+```
 
-## Architecture
+## Tech Stack
 
-### Runtime Modes
-
-**Frontend Mode**
-
-- Runs entirely in the browser, all state in `localStorage`
-- API requests go directly from the browser to each model provider
-- Suitable for personal use or static deployments
-
-**Backend Mode**
-
-- Node.js server provides `/api/*` routes and static file serving
-- Data persisted to `.data/openchat-db.json`
-- Responses streamed via NDJSON
-- API keys managed server-side for better security
-
-### Core Files
-
-| File | Role |
-|------|------|
-| `src/script.js` | Frontend main logic: i18n, rendering, state management, runtime switching |
-| `src/styles.css` | All styles |
-| `server.mjs` | Node HTTP server, API routes, provider adapters |
-| `vite.config.js` | Vite build configuration |
-| `src/stores/chatStore.ts` | Zustand state management (React layer) |
-| `src/chat-main.tsx` | React chat component mount entry |
-| `src/components/chat/` | React chat components (FriendChatCard, SynthesisCard, etc.) |
-| `src/components/ai-elements/` | AI Elements components (Message, Reasoning, PromptInput, etc.) |
-
-### Provider Adapters
-
-The backend includes three built-in API adapters:
-
-| Adapter | Providers |
-|---------|-----------|
-| `callOpenAICompatible` | OpenAI, xAI, Kimi, DeepSeek, and all OpenAI-compatible endpoints |
-| `callAnthropic` | Anthropic Claude |
-| `callGemini` | Google Gemini |
-
-Frontend mode also supports direct calls to these providers, with streaming for OpenAI-compatible endpoints.
+- **Frontend**: Vanilla JS + React 19
+- **Styling**: Tailwind CSS v4
+- **Components**: shadcn/ui + AI Elements
+- **State management**: Zustand
+- **Build tool**: Vite
+- **Backend**: Native Node.js HTTP server
+- **AI SDK**: Vercel AI SDK
+- **Markdown rendering**: Streamdown
+- **Testing**: Node built-in test runner
 
 ## Backend API
 
-```
-GET  /api/account              # Get account info
-POST /api/auth/register         # Register account
-GET  /api/models                # Get model configs
-POST /api/models                # Save model configs
-GET  /api/friends               # Get friend list
-POST /api/friends               # Save friend list
-GET  /api/group-settings        # Get group settings
-POST /api/group-settings        # Save group settings
-GET  /api/conversations         # Get conversation history
-POST /api/conversations         # Save conversation history
-POST /api/chat/run              # Non-streaming run
-POST /api/chat/run/stream       # Streaming run (NDJSON)
+```text
+GET  /api/account
+POST /api/auth/register
+GET  /api/models
+POST /api/models
+GET  /api/friends
+POST /api/friends
+GET  /api/group-settings
+POST /api/group-settings
+GET  /api/conversations
+POST /api/conversations
+POST /api/chat/run
+POST /api/chat/run/stream
 ```
 
 ## Data Storage
 
-Backend data file: `.data/openchat-db.json`
+In backend mode, data is stored by default in:
 
-```json
-{
-  "account": null,
-  "models": [],
-  "friends": [],
-  "groupSettings": {},
-  "conversations": []
-}
+```text
+.data/openchat-db.json
 ```
 
-Conversation history is capped at 50 entries.
+Main data includes:
 
-## Configuration
-
-### Password Gate
-
-Frontend mode supports optional password protection. Configuration priority:
-
-1. `VITE_FRONTEND_PASSWORD_MD5` environment variable
-2. `public/frontend-auth.json`
-
-```json
-{
-  "frontendPasswordMd5": "<md5-hash>"
-}
-```
-
-Generate an MD5 hash:
-
-```bash
-node -e "console.log(require('crypto').createHash('md5').update('your-password').digest('hex'))"
-```
-
-### Local Model Bootstrap
-
-On first use in frontend mode, if no model configs exist in `localStorage`, the app auto-loads `public/openchat.local-models.json`.
-
-- This file is for local bootstrap and demo setup only
-- Keep the repository copy as an empty placeholder (`{"models":[]}`); do not commit real API keys
-- Existing browser model configs are not overwritten
-- For OpenAI-compatible gateways, the base URL typically ends with `/v1`
+- account
+- models
+- friends
+- groupSettings
+- conversations
 
 ## Deployment
 
-### Static Frontend
+### Static deployment
 
-For Vercel, Cloudflare Pages, etc.:
+Suitable for Vercel, Cloudflare Pages, and other static hosting platforms:
 
 ```bash
 npm run build
-# Output directory: dist
 ```
 
-### Backend
+Output directory: `dist/`
+
+### Node server deployment
 
 ```bash
 node server.mjs
-# Default port: 8787
 ```
 
-Serve frontend and backend from the same origin to use `/api/*` routes without extra proxy configuration.
-
-## Notes
-
-- Test files live in `src/__tests/` and `features/`, using the Node built-in test runner
-- Backend uses JSON file persistence, suitable for lightweight scenarios
-- History edits in backend mode sync back to the server via `POST /api/conversations`
-- If backend loading fails, the UI falls back to frontend mode to keep local state usable
-- `vendor/ai-search-hub` can be vendored as an optional backend bridge for AI Search Hub
-- Platform execution features require local Python Playwright installation and accessible target sites
+Default port: `8787`
 
 ## License
 

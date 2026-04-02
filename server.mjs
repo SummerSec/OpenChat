@@ -669,6 +669,11 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  // TODO: Backend share link feature — future implementation
+  // Add GET/POST /api/conversations/:id/share to generate a shareable URL
+  // that stores conversation data on the server and lets recipients view it
+  // without needing the original user's localStorage data.
+
   if (url.pathname === "/api/chat/run" && req.method === "POST") {
     const body = await parseBody(req);
     const db = await readDb();

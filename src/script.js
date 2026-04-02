@@ -232,7 +232,7 @@ const DEFAULT_MODELS = [
     model: "gpt-4.1",
     baseUrl: "https://api.openai.com/v1",
     apiKey: "",
-    avatar: "",
+    avatar: "\u{1F916}",
     enabled: true,
     description: "Strong first-pass structure and synthesis."
   },
@@ -243,7 +243,7 @@ const DEFAULT_MODELS = [
     model: "claude-3-7-sonnet-latest",
     baseUrl: "https://api.anthropic.com/v1",
     apiKey: "",
-    avatar: "",
+    avatar: "\u{1F9E0}",
     enabled: true,
     description: "More nuance, stronger writing, better critique."
   },
@@ -254,7 +254,7 @@ const DEFAULT_MODELS = [
     model: "gemini-2.5-pro",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     apiKey: "",
-    avatar: "",
+    avatar: "\u{2728}",
     enabled: true,
     description: "Useful for verification and factual tension checks."
   },
@@ -265,7 +265,7 @@ const DEFAULT_MODELS = [
     model: "grok-3",
     baseUrl: "https://api.x.ai/v1",
     apiKey: "",
-    avatar: "",
+    avatar: "\u{26A1}",
     enabled: true,
     description: "Sharper market angles and more aggressive framing."
   }
@@ -1738,12 +1738,19 @@ function getActiveModels() {
   return getOrderedModelConfigs().filter((item) => item.enabled);
 }
 
+const FRIEND_EMOJI_POOL = [
+  "\u{1F916}", "\u{1F9E0}", "\u{2728}", "\u{26A1}", "\u{1F680}", "\u{1F31F}", "\u{1F525}",
+  "\u{1F4A1}", "\u{1F30D}", "\u{1F3AF}", "\u{1F9D9}", "\u{1F47E}", "\u{1F34E}", "\u{1F48E}",
+  "\u{1F308}", "\u{2604}\u{FE0F}", "\u{1F54A}\u{FE0F}", "\u{1F340}", "\u{1F3B2}", "\u{1F9CA}"
+];
+
 function createFriendProfile() {
   const friendCount = friendProfiles.length + 1;
+  const randomEmoji = FRIEND_EMOJI_POOL[Math.floor(Math.random() * FRIEND_EMOJI_POOL.length)];
   return {
     id: `friend-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: currentLanguage === "zh-CN" ? `\u7fa4\u53cb ${friendCount}` : `Friend ${friendCount}`,
-    avatar: "",
+    avatar: randomEmoji,
     modelConfigId: getOrderedModelConfigs()[0]?.id || "",
     systemPrompt: getDefaultFriendSystemPrompt(
       currentLanguage === "zh-CN" ? `\u7fa4\u53cb ${friendCount}` : `Friend ${friendCount}`

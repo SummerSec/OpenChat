@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 
 /**
  * Generate a consistent HSL background color from a name string.
- * Produces vibrant, distinct colors for different names.
  */
 function nameToColor(name: string): string {
   let hash = 0;
@@ -19,29 +18,44 @@ interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   src?: string;
   alt?: string;
   fallback?: string;
-  /** Size in pixels, passed to @lobehub/ui Avatar. Defaults to 40. */
+  /** Size in pixels. Defaults to 40. */
   size?: number;
 }
 
+/**
+ * Avatar component wrapping @lobehub/ui Avatar.
+ *
+ * - If `src` starts with http/data/slash → rendered as image
+ * - If `src` is an emoji string → rendered as 3D Fluent Emoji via @lobehub/ui
+ * - If no `src` → colored circle with name initials
+ */
 const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, src, alt, fallback, size, style, ...props }, ref) => {
     const displaySize = size || 40;
-    const background = nameToColor(fallback || alt || "AI");
+    const label = fallback || alt || "AI";
+    const background = nameToColor(label);
+
+    // Determine what to pass as the avatar prop to LobeAvatar
+    // URL/data images → pass as avatar (renders as <img>)
+    // Emoji strings → pass as avatar (renders as FluentEmoji)
+    // Empty → pass title only (renders initials with colored background)
+    const isUrl = src && /^(https?:\/\/|\/|image\/)/i.test(src);
+    const avatarValue = src || undefined;
 
     return (
       <div
         ref={ref}
-        className={cn("relative shrink-0", className)}
+        className={cn("relative shrink-0 [&_.ant-avatar]:border-0", className)}
         style={{ width: displaySize, height: displaySize, ...style }}
         {...props}
       >
         <LobeAvatar
-          avatar={src || undefined}
-          title={fallback || alt || "AI"}
-          alt={alt || fallback || ""}
+          avatar={avatarValue}
+          title={label}
+          alt={alt || label}
           size={displaySize}
           shape="circle"
-          background={src ? undefined : background}
+          background={isUrl ? undefined : background}
         />
       </div>
     );

@@ -102,11 +102,20 @@ function buildMessageHtml(msg, { userName = "You", synthesisLabel = "Merged" } =
 
   const isSynthesis = msg.kind === "synthesis";
   const name = msg.name || "AI";
-  const avatarInitials = (msg.avatar ? "" : name.slice(0, 2).toUpperCase());
+  const avatarValue = String(msg.avatar || "").trim();
+  const isUrl = avatarValue && /^(https?:\/\/|\/|data:image\/)/i.test(avatarValue);
   const bgColor = nameToColor(name);
-  const avatarHtml = msg.avatar
-    ? `<img src="${escapeHtml(msg.avatar)}" alt="${escapeHtml(name)}" class="avatar-image">`
-    : `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;">${escapeHtml(avatarInitials)}</span>`;
+  let avatarHtml;
+  if (avatarValue && isUrl) {
+    avatarHtml = `<img src="${escapeHtml(avatarValue)}" alt="${escapeHtml(name)}" class="avatar-image">`;
+  } else if (avatarValue) {
+    // Emoji or short text — render as text with colored background
+    const chars = Array.from(avatarValue).slice(0, 2).join("");
+    avatarHtml = `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;font-size:1.2rem;">${escapeHtml(chars)}</span>`;
+  } else {
+    const avatarInitials = name.slice(0, 2).toUpperCase();
+    avatarHtml = `<span class="avatar-fallback" style="background:${bgColor};color:#fff;border-radius:50%;">${escapeHtml(avatarInitials)}</span>`;
+  }
   const variant = isSynthesis ? "synthesis" : "assistant";
   const roleLabel = isSynthesis ? synthesisLabel : "AI";
   const bubbleClass = isSynthesis ? "message-bubble ai-bubble synthesis-bubble" : "message-bubble ai-bubble";

@@ -90,12 +90,29 @@ function nameToColor(name = "") {
 
 export function Avatar({ name, fallback, avatar, variant = "assistant" }) {
   const displayFallback = fallback || name?.slice(0, 2).toUpperCase() || "AI";
+  const avatarValue = String(avatar || "").trim();
 
-  if (avatar) {
+  if (avatarValue) {
+    // URL-like avatars → render as <img>
+    if (/^(https?:\/\/|\/|data:image\/)/i.test(avatarValue)) {
+      return h(
+        "div",
+        { className: `message-avatar avatar-${variant}` },
+        [h("img", { src: avatarValue, alt: name, className: "avatar-image" })]
+      );
+    }
+    // Emoji or short text avatar → render as text with colored background
+    const bgColor = nameToColor(name || fallback || "AI");
     return h(
       "div",
-      { className: `message-avatar avatar-${variant}` },
-      [h("img", { src: avatar, alt: name, className: "avatar-image" })]
+      {
+        className: `message-avatar avatar-${variant}`,
+        style: { background: bgColor, border: "none" }
+      },
+      [h("span", {
+        className: "avatar-fallback",
+        style: { color: "#fff", fontSize: "1.2rem" }
+      }, [Array.from(avatarValue).slice(0, 2).join("")])]
     );
   }
 

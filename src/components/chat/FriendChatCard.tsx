@@ -33,7 +33,7 @@ export function FriendChatCard({ friend, state }: FriendChatCardProps) {
             src={displayAvatar}
             alt={friend.name}
             fallback={friend.name}
-            className="h-8 w-8"
+            size={32}
           />
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">

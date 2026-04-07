@@ -3499,6 +3499,10 @@ body.frontend-access-locked #frontend-password-modal {
   color: var(--accent);
 }
 
+.file-attachment-bar[hidden] {
+  display: none;
+}
+
 .file-attachment-bar {
   display: flex;
   align-items: center;

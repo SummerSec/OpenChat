@@ -238,10 +238,19 @@
               placeholder=""
               data-i18n-placeholder="home.promptPlaceholder"
             ></textarea>
+            <div class="file-attachment-bar" id="file-attachment-bar" hidden>
+              <span class="file-attachment-info">
+                <svg class="file-icon" viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M3.5 1A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V5.621a1.5 1.5 0 0 0-.44-1.06L10.44 1.44A1.5 1.5 0 0 0 9.378 1H3.5zM3 2.5a.5.5 0 0 1 .5-.5h5.878a.5.5 0 0 1 .354.146l3.122 3.122a.5.5 0 0 1 .146.354V13.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-11z"/></svg>
+                <span id="file-attachment-name"></span>
+              </span>
+              <button id="file-attachment-remove" class="file-remove-btn" title="Remove">&times;</button>
+            </div>
             <div class="composer-toolbar">
               <div class="tool-row">
                 <span class="tool-pill" id="run-status" data-i18n="home.ready"></span>
                 <span class="tool-pill" data-i18n="home.enterHint"></span>
+                <button class="tool-pill file-upload-pill" id="file-upload-btn" data-i18n="home.uploadFile"></button>
+                <input type="file" id="file-upload-input" accept=".md,.txt,.markdown,.text" hidden />
                 <label class="expert-only-toggle" id="expert-only-toggle-label">
                   <input type="checkbox" id="expert-only-toggle" />
                   <span data-i18n="common.expertOnlyMode"></span>

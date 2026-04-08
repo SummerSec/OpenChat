@@ -228,7 +228,11 @@ node server.mjs
 5. 将其改为「允许」（Allow）
 6. 返回页面并刷新
 
-> **注意：** 此设置仅对当前站点生效，不会影响其他网站的安全策略。每个浏览器需单独设置。
+**解决方法（CORS 插件）：**
+
+如果同时遇到跨域（CORS）问题，可安装 Chrome 插件 [Allow CORS: Access-Control-Allow-Origin](https://chromewebstore.google.com/detail/lhobafahddgcelffkeicbaginigeejlf)，启用后即可解除浏览器的 CORS 限制。
+
+> **注意：** 以上设置仅对当前站点生效，不会影响其他网站的安全策略。每个浏览器需单独设置。
 
 ## 补充说明
 

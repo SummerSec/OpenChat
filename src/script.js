@@ -448,7 +448,10 @@ const I18N = {
       rebuild: "\u91cd\u65b0\u751f\u6210",
       suggestion1: "\u51b7\u6c34\u771f\u7684\u80fd\u591a\u6d88\u8017\u70ed\u91cf\u5417\uff1f",
       suggestion2: "\u8fdc\u7a0b\u529e\u516c\u6bd4\u5750\u73ed\u66f4\u597d\u5417\uff1f",
-      suggestion3: "\u5b66\u4e60\u4e00\u95e8\u65b0\u8bed\u8a00\u7684\u6700\u4f73\u65b9\u5f0f\u662f\u4ec0\u4e48\uff1f"
+      suggestion3: "\u5b66\u4e60\u4e00\u95e8\u65b0\u8bed\u8a00\u7684\u6700\u4f73\u65b9\u5f0f\u662f\u4ec0\u4e48\uff1f",
+      uploadFile: "\u4e0a\u4f20\u6587\u4ef6",
+      fileAttached: "\u5df2\u9644\u52a0\u6587\u4ef6",
+      removeFile: "\u79fb\u9664"
     },
     settings: {
       titleLabel: "\u8bbe\u7f6e",
@@ -693,7 +696,10 @@ const I18N = {
       rebuild: "Rebuild",
       suggestion1: "Does cold water burn more calories?",
       suggestion2: "Is remote work better than office work?",
-      suggestion3: "Best way to learn a new language?"
+      suggestion3: "Best way to learn a new language?",
+      uploadFile: "Upload file",
+      fileAttached: "File attached",
+      removeFile: "Remove"
     },
     settings: {
       titleLabel: "Settings",
@@ -1028,6 +1034,13 @@ function showConfirm(message, title) {
 }
 
 const promptInput = document.getElementById("prompt-input");
+const fileUploadBtn = document.getElementById("file-upload-btn");
+const fileUploadInput = document.getElementById("file-upload-input");
+const fileAttachmentBar = document.getElementById("file-attachment-bar");
+const fileAttachmentName = document.getElementById("file-attachment-name");
+const fileAttachmentRemove = document.getElementById("file-attachment-remove");
+let attachedFileContent = "";
+let attachedFileName = "";
 const synthModelSelect = document.getElementById("synth-model");
 const runStatus = document.getElementById("run-status");
 const selectedCount = document.getElementById("selected-count");
@@ -3995,7 +4008,11 @@ async function runWorkflow(options = {}) {
   const activeSession =
     activeHistoryIndex !== null && activeHistoryIndex >= 0 ? history[activeHistoryIndex] : null;
   const replaceCurrent = Boolean(options.replaceCurrent);
-  const prompt = promptInput.value.trim() || activeSession?.prompt?.trim() || "";
+  const rawPrompt = promptInput.value.trim() || activeSession?.prompt?.trim() || "";
+  const fileContext = attachedFileContent
+    ? `\n\n---\n[${attachedFileName}]\n${attachedFileContent}\n---`
+    : "";
+  const prompt = rawPrompt + fileContext;
   let activeFriends = resolveConversationFriends();
 
   // Handle expert-only mode
@@ -4165,9 +4182,13 @@ async function runWorkflow(options = {}) {
   );
   renderMessageStream();
 
-  // Clear the input after the message has been captured and rendered
+  // Clear the input and file attachment after the message has been captured and rendered
   promptInput.value = "";
   autosizePromptInput();
+  attachedFileContent = "";
+  attachedFileName = "";
+  if (fileAttachmentBar) fileAttachmentBar.hidden = true;
+  if (fileUploadInput) fileUploadInput.value = "";
 
   let results = [];
   let mergedAnswer = buildFallbackSynthesis({ prompt, language: currentLanguage, results: [] });
@@ -4518,6 +4539,30 @@ function bindWorkspaceEvents() {
     runWorkflow();
   });
   promptInput?.addEventListener("input", autosizePromptInput);
+
+  fileUploadBtn?.addEventListener("click", () => {
+    fileUploadInput?.click();
+  });
+
+  fileUploadInput?.addEventListener("change", async () => {
+    const file = fileUploadInput.files?.[0];
+    if (!file) return;
+    try {
+      attachedFileContent = await file.text();
+      attachedFileName = file.name;
+      if (fileAttachmentName) fileAttachmentName.textContent = `${t("home.fileAttached")}: ${file.name}`;
+      if (fileAttachmentBar) fileAttachmentBar.hidden = false;
+    } catch (err) {
+      console.error("File read failed:", err);
+    }
+  });
+
+  fileAttachmentRemove?.addEventListener("click", () => {
+    attachedFileContent = "";
+    attachedFileName = "";
+    if (fileAttachmentBar) fileAttachmentBar.hidden = true;
+    if (fileUploadInput) fileUploadInput.value = "";
+  });
 
   newChatButton?.addEventListener("click", () => {
     currentConversation = [];

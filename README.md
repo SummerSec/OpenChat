@@ -179,6 +179,27 @@ node server.mjs
 
 默认端口：`8787`
 
+## 常见问题
+
+### HTTPS 页面无法请求 HTTP 模型接口（Mixed Content）
+
+当 OpenChat 部署在 HTTPS 域名下，而模型的 Base URL 为 HTTP 地址时，浏览器会因 Mixed Content 安全策略拦截请求。
+
+**解决方法（Chrome）：**
+
+1. 打开模型接口所在页面（如 `https://openchat.sumsec.me/settings.html`）
+2. 点击地址栏左侧的锁头图标（或 `⚙` 图标）
+3. 选择「网站设置」（Site settings）
+4. 找到「不安全内容」（Insecure content）选项
+5. 将其改为「允许」（Allow）
+6. 返回页面并刷新
+
+**解决方法（CORS 插件）：**
+
+如果同时遇到跨域（CORS）问题，可安装 Chrome 插件 [Allow CORS: Access-Control-Allow-Origin](https://chromewebstore.google.com/detail/lhobafahddgcelffkeicbaginigeejlf)，启用后即可解除浏览器的 CORS 限制。
+
+> **注意：** 以上设置仅对当前站点生效，不会影响其他网站的安全策略。每个浏览器需单独设置。
+
 ## 许可证
 
 MIT

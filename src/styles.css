@@ -3489,6 +3489,75 @@ body.frontend-access-locked #frontend-password-modal {
   border: 1px solid var(--line);
 }
 
+.file-upload-pill {
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.file-upload-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.file-attachment-bar[hidden] {
+  display: none;
+}
+
+.file-attachment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--line);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.file-attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.file-attachment-info .file-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+#file-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-remove-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-panel);
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.file-remove-btn:hover {
+  background: var(--danger, #ef4444);
+  color: #fff;
+}
+
 @keyframes pulse {
   0% {
     background-position: 200% 0;

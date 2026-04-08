@@ -213,6 +213,27 @@ node server.mjs
 
 Serve frontend and backend from the same origin to use `/api/*` routes without extra proxy configuration.
 
+## FAQ
+
+### HTTPS Page Cannot Request HTTP Model Endpoints (Mixed Content)
+
+When OpenChat is deployed on an HTTPS domain and a model's Base URL uses HTTP, the browser blocks the request due to its Mixed Content security policy.
+
+**Solution (Chrome):**
+
+1. Open the page where the model endpoint is configured (e.g. `https://openchat.sumsec.me/settings.html`)
+2. Click the lock icon (or `⚙` icon) to the left of the address bar
+3. Select "Site settings"
+4. Find the "Insecure content" option
+5. Change it to "Allow"
+6. Go back to the page and refresh
+
+**Solution (CORS Extension):**
+
+If you also encounter cross-origin (CORS) issues, install the Chrome extension [Allow CORS: Access-Control-Allow-Origin](https://chromewebstore.google.com/detail/lhobafahddgcelffkeicbaginigeejlf). Once enabled, it removes the browser's CORS restrictions.
+
+> **Note:** These settings only apply to the current site and do not affect the security policy of other websites. Each browser must be configured separately.
+
 ## Notes
 
 - Test files live in `src/__tests/` and `features/`, using the Node built-in test runner

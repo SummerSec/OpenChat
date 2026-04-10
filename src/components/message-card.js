@@ -545,6 +545,11 @@ export function AssistantMessageCard({
   onCopy,
   messageId = ""
 }) {
+  const preview = h("div", { className: "message-preview" }, [
+    h("span", { className: "message-preview-text" }, [""]),
+    h("span", { className: "message-preview-expand" }, ["\u25b8"])
+  ]);
+
   return h(
     "div",
     { className: "message-row assistant", dataset: { messageid: messageId } },
@@ -558,6 +563,7 @@ export function AssistantMessageCard({
           isLoading,
           onCopy
         }),
+        preview,
         MessageBubble({ content, thinking, isLoading, messageId })
       ])
     ]

@@ -2689,6 +2689,63 @@ body.frontend-access-locked #frontend-password-modal {
   font-weight: 700;
 }
 
+/* ── Friend message collapse/expand ── */
+
+.message-preview {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  max-width: min(760px, 92%);
+  transition: border-color 0.15s;
+}
+
+.message-preview:hover {
+  border-color: var(--accent);
+}
+
+.message-preview-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.message-preview-expand {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.message-row.collapsed .message-bubble {
+  display: none;
+}
+
+.message-row.collapsed .message-head .message-actions {
+  display: none;
+}
+
+.message-row.collapsed .message-preview {
+  display: flex;
+}
+
+.message-row.collapsed .message-preview-expand {
+  transform: rotate(0deg);
+}
+
+.message-row:not(.collapsed) .message-preview-expand {
+  transform: rotate(90deg);
+}
+
 .ai-card-body {
   padding: 0;
   color: var(--text);
@@ -3487,6 +3544,40 @@ body.frontend-access-locked #frontend-password-modal {
   font-size: 0.8rem;
   font-weight: 600;
   border: 1px solid var(--line);
+}
+
+.group-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.group-progress-bar {
+  position: relative;
+  width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.group-progress-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.group-progress-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .file-upload-pill {

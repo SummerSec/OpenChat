@@ -451,7 +451,8 @@ const I18N = {
       suggestion3: "\u5b66\u4e60\u4e00\u95e8\u65b0\u8bed\u8a00\u7684\u6700\u4f73\u65b9\u5f0f\u662f\u4ec0\u4e48\uff1f",
       uploadFile: "\u4e0a\u4f20\u6587\u4ef6",
       fileAttached: "\u5df2\u9644\u52a0\u6587\u4ef6",
-      removeFile: "\u79fb\u9664"
+      removeFile: "\u79fb\u9664",
+      progressWaiting: "\u7b49\u5f85"
     },
     settings: {
       titleLabel: "\u8bbe\u7f6e",
@@ -699,7 +700,8 @@ const I18N = {
       suggestion3: "Best way to learn a new language?",
       uploadFile: "Upload file",
       fileAttached: "File attached",
-      removeFile: "Remove"
+      removeFile: "Remove",
+      progressWaiting: "Waiting"
     },
     settings: {
       titleLabel: "Settings",
@@ -1192,6 +1194,7 @@ let pendingFriendFocusId = null;
 let isGroupSettingsOpen = false;
 let isGroupMemberDetailsOpen = false;
 let isRunning = false;
+let currentRunId = null;
 let messageIdSeed = 0;
 
 function cloneDefaultModels() {
@@ -2124,6 +2127,38 @@ function setRuntimeStatus(message) {
   if (runStatus) runStatus.textContent = message;
 }
 
+function updateGroupProgress() {
+  if (!runStatus) return;
+  if (!currentRunId || !isRunning) {
+    // Restore to plain text — clear any progress bar HTML
+    if (runStatus.querySelector(".group-progress")) {
+      runStatus.textContent = t("home.ready");
+    }
+    return;
+  }
+  const friendMessages = currentConversation.filter(
+    (m) => m.kind === "model" && m.runId === currentRunId
+  );
+  if (friendMessages.length === 0) return;
+
+  const total = friendMessages.length;
+  const done = friendMessages.filter((m) => !m.isLoading).length;
+  const waiting = friendMessages.filter((m) => m.isLoading).map((m) => m.name);
+  const pct = total > 0 ? done / total : 0;
+
+  const label = waiting.length > 0
+    ? `${done}/${total} | ${t("home.progressWaiting")}: ${waiting.join(", ")}`
+    : `${done}/${total}`;
+
+  runStatus.innerHTML =
+    `<span class="group-progress">` +
+      `<span class="group-progress-bar">` +
+        `<span class="group-progress-fill" style="transform:scaleX(${pct})"></span>` +
+      `</span>` +
+      `<span class="group-progress-text">${escapeHtml(label)}</span>` +
+    `</span>`;
+}
+
 function autosizePromptInput() {
   if (!promptInput) return;
   promptInput.style.height = "0px";
@@ -2132,10 +2167,20 @@ function autosizePromptInput() {
   promptInput.style.height = `${Math.min(Math.max(promptInput.scrollHeight, minH), maxH)}px`;
 }
 
-function scrollMessageStreamToBottom() {
+let userHasScrolledUp = false;
+
+function scrollMessageStreamToBottom(force = false) {
   if (!messageStream) return;
+  if (!force && userHasScrolledUp) return;
   requestAnimationFrame(() => {
     messageStream.scrollTop = messageStream.scrollHeight;
+  });
+}
+
+if (messageStream) {
+  messageStream.addEventListener("scroll", () => {
+    const distanceFromBottom = messageStream.scrollHeight - messageStream.scrollTop - messageStream.clientHeight;
+    userHasScrolledUp = distanceFromBottom > 150;
   });
 }
 
@@ -3141,6 +3186,25 @@ function renderMessageStream() {
         onCopy: () => copyMessageToClipboard(item)
       });
 
+      // Collapse friend (model) messages by default; synthesis stays expanded
+      if (item.kind === "model") {
+        card.classList.add("collapsed");
+        const preview = card.querySelector(".message-preview");
+        const avatarEl = card.querySelector(".message-avatar");
+        const toggleCollapse = () => card.classList.toggle("collapsed");
+        if (preview) preview.addEventListener("click", toggleCollapse);
+        if (avatarEl) avatarEl.addEventListener("click", toggleCollapse);
+        avatarEl?.style.setProperty("cursor", "pointer");
+        // Set initial preview text
+        const previewText = card.querySelector(".message-preview-text");
+        if (previewText) {
+          const raw = (item.content || "").replace(/[\n\r]+/g, " ").trim();
+          previewText.textContent = raw
+            ? (raw.length > 60 ? raw.slice(0, 60) + "…" : raw)
+            : (currentLanguage === "zh-CN" ? "生成中…" : "Generating…");
+        }
+      }
+
       // Insert at correct position (maintain order), skipping #chat-root
       const nonReactChildren = Array.from(messageStream.children).filter((c) => c.id !== "chat-root");
       const nextElement = nonReactChildren[index];
@@ -3164,6 +3228,18 @@ function renderMessageStream() {
         contentNode.dataset.loading = String(Boolean(item.isLoading));
       } else {
         console.debug("[Render] .streamdown-target NOT FOUND for", item.messageId);
+      }
+
+      // Update preview text for collapsed friend messages
+      if (item.kind === "model") {
+        const previewText = existingElement.querySelector(".message-preview-text");
+        if (previewText) {
+          const raw = (item.content || "").replace(/[\n\r]+/g, " ").trim();
+          previewText.textContent = raw.length > 60 ? raw.slice(0, 60) + "…" : raw;
+          if (!raw && item.isLoading) {
+            previewText.textContent = currentLanguage === "zh-CN" ? "生成中…" : "Generating…";
+          }
+        }
       }
 
       // Remove skeleton loader once content arrives OR generation is done
@@ -3219,6 +3295,7 @@ function renderMessageStream() {
 
   renderAiMessageMarkdown(messageStream);
   scrollMessageStreamToBottom();
+  updateGroupProgress();
 }
 
 function renderModelToggleGrid() {
@@ -4070,6 +4147,9 @@ async function runWorkflow(options = {}) {
   }
 
   isRunning = true;
+  userHasScrolledUp = false;
+  const runId = createConversationId();
+  currentRunId = runId;
   setRuntimeStatus(t("common.running", { count: activeFriends.length }));
 
   // Auto-hide group settings panel when user starts chatting
@@ -4078,8 +4158,6 @@ async function runWorkflow(options = {}) {
     isGroupMemberDetailsOpen = false;
     renderGroupSettingsPanel();
   }
-
-  const runId = createConversationId();
   const createdAt = new Date().toISOString();
 
   // Determine if we should show synthesis (only if synthesisEnabled)
@@ -4440,6 +4518,8 @@ async function runWorkflow(options = {}) {
     setRuntimeStatus(error.message);
   } finally {
     isRunning = false;
+    currentRunId = null;
+    updateGroupProgress();
   }
 }
 

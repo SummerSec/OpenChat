@@ -38,8 +38,19 @@ function mountOrUpdateStreamdownNode(node) {
 
     root = createRoot(node);
     root._node = node;
+    root._lastContent = "";
+    root._lastLoading = false;
     streamdownRoots.set(key, root);
   }
+
+  // Skip the React render when neither content nor loading state has changed.
+  // The high-frequency caller (renderMessageStream after every token delta)
+  // would otherwise diff identical trees over and over.
+  if (root._lastContent === content && root._lastLoading === isLoading) {
+    return;
+  }
+  root._lastContent = content;
+  root._lastLoading = isLoading;
 
   root.render(createElement(AssistantMarkdown, { content, isLoading }));
 }
@@ -108,5 +119,7 @@ export function updateMessageContent(messageId, content, isLoading = false) {
   }
 
   root.render(createElement(AssistantMarkdown, { content, isLoading }));
+  root._lastContent = content;
+  root._lastLoading = isLoading;
   return true;
 }

@@ -2415,6 +2415,8 @@ body.frontend-access-locked #frontend-password-modal {
   align-items: flex-start;
   justify-content: flex-end;
   gap: 10px;
+  /* Limit layout/paint propagation when streaming updates this card. */
+  contain: layout style;
 }
 
 .message-row + .message-row {

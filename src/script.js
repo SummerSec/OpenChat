@@ -20,7 +20,7 @@ import { getWorkflowPreflightState } from "../features/group/workflow-run-utils.
 import { hasThinkingContent, normalizeThinkingEnabled } from "./utils/thinking-config-utils.mjs";
 import { callFrontendStream } from "./utils/ai-sdk-frontend-stream.mjs";
 import { renderSafeMarkdown } from "./utils/markdown-render-utils.mjs";
-import { renderAiMessageMarkdown } from "./utils/ai-message-streamdown.js";
+import { renderAiMessageMarkdown, updateMessageContent } from "./utils/ai-message-streamdown.js";
 import {
   MessageCard,
   renderMessages,
@@ -1103,6 +1103,12 @@ const applyGroupSettingsButton = document.getElementById("apply-group-settings")
 const saveDefaultGroupSettingsButton = document.getElementById("save-default-group-settings");
 const expertOnlyToggle = document.getElementById("expert-only-toggle");
 const expertOnlyToggleLabel = document.getElementById("expert-only-toggle-label");
+// Stream-stage UI bits that renderMessageStream toggles on every render.
+// Cached at module load to avoid N querySelector calls per token delta.
+const workspaceStageCopyEl = document.querySelector(".workspace-stage-copy");
+const suggestionRowEl = document.querySelector(".suggestion-row");
+const chatHeaderEl = document.getElementById("chat-header");
+const chatHeaderCompactEl = document.getElementById("chat-header-compact");
 
 let runtimeMode = localStorage.getItem(STORAGE_KEYS.runtime) || "frontend";
 let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
@@ -2134,8 +2140,24 @@ function autosizePromptInput() {
 
 function scrollMessageStreamToBottom() {
   if (!messageStream) return;
+  // Respect the user's manual scroll: don't yank the viewport back to bottom
+  // if they have scrolled up to read earlier messages.
+  const distanceFromBottom =
+    messageStream.scrollHeight - messageStream.scrollTop - messageStream.clientHeight;
+  if (distanceFromBottom > 80) return;
   requestAnimationFrame(() => {
     messageStream.scrollTop = messageStream.scrollHeight;
+  });
+}
+
+// Coalesce high-frequency render requests (e.g. token deltas) into one rAF.
+let renderMessageStreamScheduled = false;
+function scheduleRenderMessageStream() {
+  if (renderMessageStreamScheduled) return;
+  renderMessageStreamScheduled = true;
+  requestAnimationFrame(() => {
+    renderMessageStreamScheduled = false;
+    renderMessageStream();
   });
 }
 
@@ -2315,28 +2337,11 @@ function removeMessagesByRunId(runId) {
 
 async function streamTextToMessage(messageId, text, field = "content") {
   const value = String(text || "");
-  const chunks = value.match(/[\s\S]{1,12}/g) || []; // Smaller chunks for smoother streaming
-  if (!chunks.length) {
-    updateConversationMessageById(messageId, { [field]: value, isLoading: false });
-    renderMessageStream();
-    return;
-  }
-
-  // Start streaming
-  updateConversationMessageById(messageId, { [field]: "", isLoading: true });
-  renderMessageStream();
-
-  let buffer = "";
-  for (const chunk of chunks) {
-    buffer += chunk;
-    updateConversationMessageById(messageId, { [field]: buffer, isLoading: true });
-    renderMessageStream();
-    await sleep(12); // Slightly faster for smoother effect
-  }
-
-  // Streaming complete
-  updateConversationMessageById(messageId, { isLoading: false });
-  renderMessageStream();
+  // Streamdown already provides token-level animation via isAnimating.
+  // We just commit the final text once and let the render layer animate it,
+  // instead of forcing N full-tree re-renders for a fake typewriter effect.
+  updateConversationMessageById(messageId, { [field]: value, isLoading: false });
+  scheduleRenderMessageStream();
 }
 
 function mockResponseFor(model, prompt, platformContext = null) {
@@ -2556,14 +2561,18 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
             thinking: currentThinking,
             isLoading: true
           });
+          scheduleRenderMessageStream();
         } else if (delta.type === "content") {
           currentContent += delta.text;
           updateConversationMessageById(targetId, {
             content: currentContent,
             isLoading: true
           });
+          // Direct React Streamdown update — no full-tree re-render per token.
+          if (!updateMessageContent(targetId, currentContent, true)) {
+            scheduleRenderMessageStream();
+          }
         }
-        renderMessageStream();
       } : undefined,
     });
 
@@ -2666,14 +2675,17 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
             thinking: currentThinking,
             isLoading: true
           });
+          scheduleRenderMessageStream();
         } else if (delta.type === "content") {
           currentContent += delta.text;
           updateConversationMessageById(targetId, {
             content: currentContent,
             isLoading: true
           });
+          if (!updateMessageContent(targetId, currentContent, true)) {
+            scheduleRenderMessageStream();
+          }
         }
-        renderMessageStream();
       } : undefined,
     });
 
@@ -3071,29 +3083,22 @@ function renderMessageStream() {
   const userName = currentLanguage === "zh-CN" ? "\u6211" : "You";
 
   // Toggle workspace stage copy visibility based on conversation state
-  const workspaceStage = document.querySelector(".workspace-stage-copy");
-  if (workspaceStage) {
-    workspaceStage.classList.toggle("is-hidden", currentConversation.length > 0);
+  const _hasMessagesCached = currentConversation.length > 0;
+  if (workspaceStageCopyEl) {
+    workspaceStageCopyEl.classList.toggle("is-hidden", _hasMessagesCached);
   }
-
-  // Toggle suggestion row visibility based on conversation state
-  const suggestionRow = document.querySelector(".suggestion-row");
-  if (suggestionRow) {
-    suggestionRow.classList.toggle("is-hidden", currentConversation.length > 0);
+  if (suggestionRowEl) {
+    suggestionRowEl.classList.toggle("is-hidden", _hasMessagesCached);
   }
+  if (chatHeaderEl) chatHeaderEl.classList.toggle("is-hidden", _hasMessagesCached);
+  if (chatHeaderCompactEl) chatHeaderCompactEl.classList.toggle("is-hidden", !_hasMessagesCached);
 
-  // Toggle between full chat header and compact ⚙ button
-  const hasMessages = currentConversation.length > 0;
-  const chatHeader = document.getElementById("chat-header");
-  const chatHeaderCompact = document.getElementById("chat-header-compact");
-  if (chatHeader) chatHeader.classList.toggle("is-hidden", hasMessages);
-  if (chatHeaderCompact) chatHeaderCompact.classList.toggle("is-hidden", !hasMessages);
-
-  // Remove empty state as soon as conversation has messages
-  if (currentConversation.length > 0) {
+  if (_hasMessagesCached) {
     const emptyState = messageStream.querySelector(".stream-empty-state");
     if (emptyState) emptyState.remove();
   }
+
+  const hasMessages = _hasMessagesCached;
 
   if (!currentConversation.length) {
     // Preserve the React #chat-root mount point
@@ -3128,97 +3133,113 @@ function renderMessageStream() {
     }
   }
 
-  // Process each message in current conversation
-  currentConversation.forEach((item, index) => {
+  // Process each message in current conversation.
+  // Walk the list once and stitch new cards in using `anchor` (the most
+  // recently placed sibling) rather than reading children-by-index every
+  // iteration. Existing cards reuse a single tree walk via collectCardNodes
+  // instead of issuing 7 querySelector calls.
+  const chatRoot = document.getElementById("chat-root");
+  let anchor = null;
+  currentConversation.forEach((item) => {
     const existingElement = renderedMessageElements.get(item.messageId);
 
     if (!existingElement) {
-      // Create new message card using MessageCard component
       const card = MessageCard(item, {
-        userName: currentLanguage === "zh-CN" ? "我" : "You",
-        synthesisLabel: currentLanguage === "zh-CN" ? "整合" : "Merged",
+        userName,
+        synthesisLabel: currentLanguage === "zh-CN" ? "\u6574\u5408" : "Merged",
         currentLanguage,
         onCopy: () => copyMessageToClipboard(item)
       });
 
-      // Insert at correct position (maintain order), skipping #chat-root
-      const nonReactChildren = Array.from(messageStream.children).filter((c) => c.id !== "chat-root");
-      const nextElement = nonReactChildren[index];
-      if (nextElement) {
-        messageStream.insertBefore(card, nextElement);
+      if (anchor && anchor.nextSibling) {
+        messageStream.insertBefore(card, anchor.nextSibling);
+      } else if (chatRoot && chatRoot.parentNode === messageStream) {
+        messageStream.insertBefore(card, chatRoot);
       } else {
-        const chatRoot = document.getElementById("chat-root");
-        if (chatRoot) {
-          messageStream.insertBefore(card, chatRoot);
-        } else {
-          messageStream.appendChild(card);
-        }
+        messageStream.appendChild(card);
       }
 
       renderedMessageElements.set(item.messageId, card);
+      anchor = card;
     } else {
-      // Sync content/loading onto .streamdown-target
-      const contentNode = existingElement.querySelector(".streamdown-target");
-      if (contentNode) {
-        contentNode.dataset.content = item.content || "";
-        contentNode.dataset.loading = String(Boolean(item.isLoading));
-      } else {
-        console.debug("[Render] .streamdown-target NOT FOUND for", item.messageId);
+      const cardNodes = collectCardNodes(existingElement);
+
+      if (cardNodes.contentNode) {
+        cardNodes.contentNode.dataset.content = item.content || "";
+        cardNodes.contentNode.dataset.loading = String(Boolean(item.isLoading));
       }
 
-      // Remove skeleton loader once content arrives OR generation is done
-      if (item.content || !item.isLoading) {
-        const skeleton = existingElement.querySelector(".ai-card-loading");
-        if (skeleton) skeleton.remove();
+      if ((item.content || !item.isLoading) && cardNodes.skeletonNode) {
+        cardNodes.skeletonNode.remove();
       }
 
-      // Update thinking section — create if missing, update if present
       if (item.thinking) {
-        const thinkingNode = existingElement.querySelector(".think-content");
-        if (thinkingNode) {
-          thinkingNode.textContent = item.thinking;
-        } else {
-          // Dynamically create ThinkingBlock when thinking arrives during streaming
-          const bubble = existingElement.querySelector(".message-bubble");
-          if (bubble && !bubble.querySelector(".ai-bubble-thinking")) {
-            const thinkingSection = Components.h("div", { className: "ai-bubble-thinking" }, [
-              Components.ThinkingBlock({ thinking: item.thinking })
-            ]);
-            bubble.insertBefore(thinkingSection, bubble.firstChild);
-          }
-        }
-      }
-
-      // Update loading state in header
-      const roleBadge = existingElement.querySelector(".message-role");
-      if (roleBadge) {
-        const isGenerating = item.isLoading;
-        const currentText = roleBadge.textContent;
-        const targetText = isGenerating ? "\u751F\u6210\u4E2D" : "AI \u7FA4\u53CB";
-        if (currentText !== targetText) {
-          roleBadge.textContent = targetText;
-          roleBadge.classList.toggle("message-role--loading", isGenerating);
-        }
-      }
-
-      // Add copy button when streaming completes (cards created with isLoading:true lack it)
-      if (!item.isLoading && item.kind !== "user") {
-        const messageHead = existingElement.querySelector(".message-head");
-        if (messageHead && !messageHead.querySelector(".message-actions")) {
-          const actionsDiv = Components.h("div", { className: "message-actions" }, [
-            Components.CopyButton({
-              onCopy: () => copyMessageToClipboard(item),
-              label: currentLanguage === "zh-CN" ? "复制" : "Copy"
-            })
+        if (cardNodes.thinkingNode) {
+          cardNodes.thinkingNode.textContent = item.thinking;
+        } else if (cardNodes.bubbleNode && !cardNodes.bubbleNode.querySelector(".ai-bubble-thinking")) {
+          const thinkingSection = Components.h("div", { className: "ai-bubble-thinking" }, [
+            Components.ThinkingBlock({ thinking: item.thinking })
           ]);
-          messageHead.appendChild(actionsDiv);
+          cardNodes.bubbleNode.insertBefore(thinkingSection, cardNodes.bubbleNode.firstChild);
         }
       }
+
+      if (cardNodes.roleBadge) {
+        const isGenerating = item.isLoading;
+        const targetText = isGenerating ? "\u751F\u6210\u4E2D" : "AI \u7FA4\u53CB";
+        if (cardNodes.roleBadge.textContent !== targetText) {
+          cardNodes.roleBadge.textContent = targetText;
+          cardNodes.roleBadge.classList.toggle("message-role--loading", isGenerating);
+        }
+      }
+
+      if (!item.isLoading && item.kind !== "user" && cardNodes.messageHead && !cardNodes.actionsNode) {
+        const actionsDiv = Components.h("div", { className: "message-actions" }, [
+          Components.CopyButton({
+            onCopy: () => copyMessageToClipboard(item),
+            label: currentLanguage === "zh-CN" ? "\u590D\u5236" : "Copy"
+          })
+        ]);
+        cardNodes.messageHead.appendChild(actionsDiv);
+      }
+
+      anchor = existingElement;
     }
   });
 
   renderAiMessageMarkdown(messageStream);
   scrollMessageStreamToBottom();
+}
+
+// Single-pass DOM walk collecting all descendants renderMessageStream needs
+// to sync into. Replaces ~7 querySelector calls per card per render.
+function collectCardNodes(card) {
+  const nodes = {
+    contentNode: null,
+    skeletonNode: null,
+    thinkingNode: null,
+    bubbleNode: null,
+    roleBadge: null,
+    messageHead: null,
+    actionsNode: null
+  };
+  if (!card) return nodes;
+  const walker = document.createTreeWalker(card, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode();
+  while (node) {
+    const cls = node.classList;
+    if (cls && cls.length) {
+      if (!nodes.contentNode && cls.contains("streamdown-target")) nodes.contentNode = node;
+      if (!nodes.skeletonNode && cls.contains("ai-card-loading")) nodes.skeletonNode = node;
+      if (!nodes.thinkingNode && cls.contains("think-content")) nodes.thinkingNode = node;
+      if (!nodes.bubbleNode && cls.contains("message-bubble")) nodes.bubbleNode = node;
+      if (!nodes.roleBadge && cls.contains("message-role")) nodes.roleBadge = node;
+      if (!nodes.messageHead && cls.contains("message-head")) nodes.messageHead = node;
+      if (!nodes.actionsNode && cls.contains("message-actions")) nodes.actionsNode = node;
+    }
+    node = walker.nextNode();
+  }
+  return nodes;
 }
 
 function renderModelToggleGrid() {
@@ -4246,7 +4267,7 @@ async function runWorkflow(options = {}) {
               updateConversationMessageById(id, {
                 thinking: `${current?.thinking || ""}${event.delta || ""}`
               });
-              renderMessageStream();
+              scheduleRenderMessageStream();
               return;
             }
             if (event.type === "friend_content_delta" || event.type === "model_content_delta") {
@@ -4254,10 +4275,13 @@ async function runWorkflow(options = {}) {
                 friendIdToMessageId.get(event.friendId) || friendIdToMessageId.get(event.modelName);
               if (!id) return;
               const current = currentConversation.find((item) => item.messageId === id);
-              updateConversationMessageById(id, {
-                content: `${current?.content || ""}${event.delta || ""}`
-              });
-              renderMessageStream();
+              const nextContent = `${current?.content || ""}${event.delta || ""}`;
+              updateConversationMessageById(id, { content: nextContent });
+              // Point-update the React Streamdown root for this message directly,
+              // bypassing the full-tree renderMessageStream() per token.
+              if (!updateMessageContent(id, nextContent, true)) {
+                scheduleRenderMessageStream();
+              }
               return;
             }
             if (event.type === "friend_done" || event.type === "model_done") {
@@ -4268,7 +4292,7 @@ async function runWorkflow(options = {}) {
                 source: event.source || "",
                 isLoading: false
               });
-              renderMessageStream();
+              scheduleRenderMessageStream();
               renderSynthesisOptions();
               return;
             }
@@ -4276,14 +4300,18 @@ async function runWorkflow(options = {}) {
               // Add synthesis placeholder to conversation on first synthesis delta
               if (synthesisPlaceholder && !currentConversation.some((m) => m.messageId === synthesisPlaceholder.messageId)) {
                 currentConversation.push(synthesisPlaceholder);
+                // New card needs a full render to mount; subsequent deltas
+                // will be point-updated below.
+                renderMessageStream();
               }
               const current = currentConversation.find(
                 (item) => item.messageId === synthesisPlaceholder.messageId
               );
-              updateConversationMessageById(synthesisPlaceholder.messageId, {
-                content: `${current?.content || ""}${event.delta || ""}`
-              });
-              renderMessageStream();
+              const nextContent = `${current?.content || ""}${event.delta || ""}`;
+              updateConversationMessageById(synthesisPlaceholder.messageId, { content: nextContent });
+              if (!updateMessageContent(synthesisPlaceholder.messageId, nextContent, true)) {
+                scheduleRenderMessageStream();
+              }
               return;
             }
             if (event.type === "done") {

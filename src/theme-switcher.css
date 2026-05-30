@@ -42,7 +42,7 @@
   transform: translateX(-50%) scale(0.95);
   min-width: 180px;
   padding: 8px;
-  border-radius: 16px;
+  border-radius: 10px;
   background: var(--bg-panel-solid);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);

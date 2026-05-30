@@ -15,6 +15,9 @@ OpenChat 是一个多模型 AI 协作工作区。你可以把同一条问题同�
 - **群友编排与角色设定**：支持为每个 AI 群友绑定模型、设置头像、描述和系统提示词。
 - **群组设置**：支持共享系统提示词、成员选择、平台能力偏好等会话级配置。
 - **流式消息渲染**：实时输出回答内容，适合长文本、代码块和逐步生成场景。
+- **随时停止生成**：流式过程中可点击「停止」中断本轮，已输出的内容会保留。
+- **消息级操作**：每条模型回答支持「重新生成」（失败即重试），用户消息支持「编辑重发」。
+- **图片 / 多模态输入**：可附带图片随提示词发送给支持视觉的模型（前端 / 后端模式均支持）。
 - **Markdown / 代码高亮 / Mermaid / 数学公式**：面向 AI 内容展示做了增强，便于阅读复杂回复。
 - **思维链折叠展示**：自动识别 `<think>` 与 reasoning 内容，减少主界面噪音。
 - **会话历史管理**：保存、浏览和管理历史对话，便于复盘与追问。
@@ -170,6 +173,30 @@ npm run build
 ```
 
 产物目录：`dist/`
+
+### Vercel 部署
+
+Vercel 适合部署 **Frontend mode**（纯静态）。OpenChat 的 Node 后端是自托管 HTTP Server，不适配 Vercel 的 Serverless，因此在 Vercel 上请使用前端模式（API key 存浏览器、浏览器直连模型接口）。
+
+**方式一：导入 Git 仓库（推荐）**
+
+1. 将仓库推送到 GitHub / GitLab / Bitbucket。
+2. 在 Vercel 控制台点击 **Add New… → Project**，导入该仓库。
+3. 构建设置（仓库已含 `vercel.json`，通常会自动带出）：
+   - Framework Preset：`Vite`（或 `Other`）
+   - Build Command：`npm run build`
+   - Output Directory：`dist`
+4. 点击 **Deploy**。部署完成后打开分配的域名，进入 `settings.html`，将运行模式设为 **Frontend**，并填入模型的 provider / Base URL / API key 即可使用。
+
+**方式二：使用 Vercel CLI**
+
+```bash
+npm i -g vercel
+vercel          # 预览部署
+vercel --prod   # 生产部署
+```
+
+> **注意：** Vercel 域名是 HTTPS。若模型 Base URL 为 HTTP，会触发浏览器的 Mixed Content 拦截，详见下方「常见问题」。
 
 ### Node 服务部署
 

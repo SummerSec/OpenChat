@@ -15,6 +15,9 @@ OpenChat is a multi-model AI collaboration workspace. You can send the same prom
 - **Friend orchestration and role setup**: Configure each AI friend with its own model, avatar, description, and system prompt.
 - **Group settings**: Manage shared system prompts, member selection, and platform capability preferences at the conversation level.
 - **Streaming message rendering**: View responses as they are generated, which works especially well for long text, code blocks, and step-by-step output.
+- **Stop anytime**: Interrupt the current run while it streams; the content already produced is kept.
+- **Per-message actions**: Regenerate any model answer (retry on failure) and edit-and-resend user messages.
+- **Image / multimodal input**: Attach images alongside your prompt for vision-capable models (works in both runtime modes).
 - **Markdown / code highlight / Mermaid / math**: Enhanced rendering for AI-generated content so complex replies stay readable.
 - **Reasoning collapse**: Automatically folds `<think>` and reasoning content to reduce noise in the main chat view.
 - **Conversation history**: Save, browse, and manage previous sessions for follow-up questions and review.
@@ -170,6 +173,30 @@ npm run build
 ```
 
 Output directory: `dist/`
+
+### Deploy to Vercel
+
+Vercel is a good fit for **Frontend mode** (pure static). OpenChat's Node backend is a self-hosted HTTP server and is not compatible with Vercel's serverless model, so use frontend mode on Vercel (API keys live in the browser, which calls model APIs directly).
+
+**Option 1: Import a Git repository (recommended)**
+
+1. Push the repo to GitHub / GitLab / Bitbucket.
+2. In the Vercel dashboard, click **Add New… → Project** and import the repo.
+3. Build settings (the repo ships a `vercel.json`, so these are usually pre-filled):
+   - Framework Preset: `Vite` (or `Other`)
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+4. Click **Deploy**. When it's live, open the assigned domain, go to `settings.html`, set the runtime mode to **Frontend**, and enter your model provider / Base URL / API key.
+
+**Option 2: Use the Vercel CLI**
+
+```bash
+npm i -g vercel
+vercel          # preview deployment
+vercel --prod   # production deployment
+```
+
+> **Note:** Vercel domains are HTTPS. If a model's Base URL uses HTTP, the browser's Mixed Content policy will block it — see the FAQ below.
 
 ### Node server deployment
 

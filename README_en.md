@@ -2,7 +2,7 @@
 
 [中文](./README.md)
 
-OpenChat is a multi-model AI collaboration workspace. You can send the same prompt to multiple models at the same time, compare their responses in one place, and let a designated AI synthesize the final answer. It works well for solution comparison, group-style discussion, role-based collaboration, and conclusion merging.
+OpenChat is a multi-model AI collaboration workspace. You can send the same prompt to multiple models at once, compare their responses side by side, and — when you want — let a designated "synthesis expert" merge them into a single conclusion. It works well for solution comparison, group-style discussion, role-based collaboration, and conclusion merging.
 
 ## Live Demo
 
@@ -10,21 +10,31 @@ OpenChat is a multi-model AI collaboration workspace. You can send the same prom
 
 ## Core Features
 
-- **Parallel multi-model chat**: Send one prompt to multiple AI friends at once and review their answers side by side.
-- **AI synthesis expert**: Assign one friend as the synthesis role to merge multi-model outputs into a single conclusion.
-- **Friend orchestration and role setup**: Configure each AI friend with its own model, avatar, description, and system prompt.
-- **Group settings**: Manage shared system prompts, member selection, and platform capability preferences at the conversation level.
-- **Streaming message rendering**: View responses as they are generated, which works especially well for long text, code blocks, and step-by-step output.
+- **Parallel multi-model chat**: Send one prompt to multiple AI friends at once and compare their answers side by side.
+- **On-demand AI synthesis (synthesis expert)**: Assign one friend as the "synthesis expert". After comparing the answers, click **Synthesize** to generate a combined conclusion **on demand** — it summarizes only the latest round and uses the answer text only (no reasoning/thinking). The synthesis is kept and can serve as the basis for follow-up turns.
+- **Expert-only chat**: When enabled, follow-up turns continue only with the synthesis expert, building on the existing synthesis/answer text instead of re-querying every friend.
 - **Stop anytime**: Interrupt the current run while it streams; the content already produced is kept.
 - **Per-message actions**: Regenerate any model answer (retry on failure) and edit-and-resend user messages.
 - **Image / multimodal input**: Attach images alongside your prompt for vision-capable models (works in both runtime modes).
+- **Friend orchestration and role setup**: Configure each AI friend with its own model, avatar, description, and system prompt.
+- **Group settings**: Manage shared system prompts, member selection, and platform capability preferences at the conversation level.
+- **Streaming message rendering**: View responses as they are generated, ideal for long text, code blocks, and step-by-step output.
 - **Markdown / code highlight / Mermaid / math**: Enhanced rendering for AI-generated content so complex replies stay readable.
 - **Reasoning collapse**: Automatically folds `<think>` and reasoning content to reduce noise in the main chat view.
 - **Conversation history**: Save, browse, and manage previous sessions for follow-up questions and review.
 - **Dual runtime modes**: Supports both frontend-only mode and Node.js backend mode for lightweight deployment or server-side persistence.
+- **CORS proxy setting**: In frontend mode, configure a CORS proxy in Settings to bypass cross-origin restrictions when the browser calls model APIs directly.
 - **Model configuration center**: Manage provider, model, base URL, API key, and enabled state in one place.
 - **Themes / font size / bilingual UI**: Includes multiple themes, adjustable font size, and Chinese/English interface switching.
 - **Frontend access password**: Adds a lightweight access gate for public deployments.
+
+## Workflow
+
+1. In **Friends**, create AI friends and bind a model to each; in **Settings**, enter the provider / Base URL / API key.
+2. Back in the workspace, select the friends for this round, type your prompt (optionally attach images), and send.
+3. Models stream their answers in parallel. You can **Stop** at any time, **Regenerate** a single answer, or **Edit & resend** your own message.
+4. When you want a conclusion, click **Synthesize** to have the synthesis expert merge the round's answer text into a combined result.
+5. To go deeper, enable **Expert-only chat** and keep asking the expert, building on the existing synthesis.
 
 ## Screenshots
 
@@ -45,7 +55,7 @@ OpenChat is a multi-model AI collaboration workspace. You can send the same prom
 | Page | Path | Description |
 |---|---|---|
 | Workspace | `index.html` | Multi-model chat, synthesized answers, and streaming message flow |
-| Settings | `settings.html` | Runtime mode, theme, font size, and model configuration |
+| Settings | `settings.html` | Runtime mode, CORS proxy, theme, font size, and model configuration |
 | Friends | `friends.html` | AI friend management, role prompts, and model binding |
 | Account | `auth.html` | Local account registration and account display |
 | History | `history.html` | Conversation history browsing and management |

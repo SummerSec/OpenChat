@@ -286,6 +286,68 @@ export function CopyButton({ onCopy, label = "复制" }) {
   return btn;
 }
 
+/** Refresh/regenerate icon */
+export function RefreshIcon() {
+  return h(
+    "svg",
+    {
+      className: "copy-icon-svg",
+      viewBox: "0 0 24 24",
+      width: "16",
+      height: "16",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    },
+    [
+      h("polyline", { points: "23 4 23 10 17 10" }),
+      h("path", { d: "M20.49 15a9 9 0 1 1-2.12-9.36L23 10" })
+    ]
+  );
+}
+
+/** Edit/pencil icon */
+export function EditIcon() {
+  return h(
+    "svg",
+    {
+      className: "copy-icon-svg",
+      viewBox: "0 0 24 24",
+      width: "16",
+      height: "16",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    },
+    [
+      h("path", { d: "M12 20h9" }),
+      h("path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" })
+    ]
+  );
+}
+
+/**
+ * Generic icon+label action button (regenerate, edit, …)
+ */
+export function ActionButton({ onClick, label, title, icon }) {
+  return h(
+    "button",
+    {
+      className: "message-action-btn",
+      title: title || label,
+      onClick: (e) => {
+        e.stopPropagation();
+        onClick();
+      }
+    },
+    [icon, h("span", { className: "copy-label" }, [label])]
+  );
+}
+
 /**
  * Complete message header
  * @param {Object} props
@@ -305,7 +367,9 @@ export function MessageHeader({
   isSynthesis = false,
   isLoading = false,
   synthesisLabel = "整合",
-  onCopy
+  onCopy,
+  onRegenerate,
+  regenerateLabel = "重新生成"
 }) {
   const children = [
     h("span", { className: "message-name" }, [escapeHtml(name)]),
@@ -318,13 +382,18 @@ export function MessageHeader({
 
   children.push(MessageTime({ timestamp }));
 
-  // Add copy button if provided
-  if (onCopy && !isLoading) {
-    children.push(
-      h("div", { className: "message-actions" }, [
-        CopyButton({ onCopy })
-      ])
-    );
+  // Add action buttons if provided
+  if ((onCopy || onRegenerate) && !isLoading) {
+    const actions = [];
+    if (onRegenerate) {
+      actions.push(ActionButton({
+        onClick: onRegenerate,
+        label: regenerateLabel,
+        icon: RefreshIcon()
+      }));
+    }
+    if (onCopy) actions.push(CopyButton({ onCopy }));
+    children.push(h("div", { className: "message-actions" }, actions));
   }
 
   return h(
@@ -496,8 +565,13 @@ export function UserMessageCard({
   content,
   timestamp,
   userName = "我",
-  onCopy
+  onCopy,
+  onEdit,
+  editLabel = "编辑"
 }) {
+  const actions = [];
+  if (onEdit) actions.push(ActionButton({ onClick: onEdit, label: editLabel, icon: EditIcon() }));
+  if (onCopy) actions.push(CopyButton({ onCopy }));
   return h(
     "article",
     { className: "message-row user" },
@@ -508,9 +582,7 @@ export function UserMessageCard({
           h("span", { className: "message-name" }, [escapeHtml(userName)]),
           h("span", { className: "message-role" }, ["成员"]),
           MessageTime({ timestamp }),
-          onCopy ? h("div", { className: "message-actions" }, [
-            CopyButton({ onCopy })
-          ]) : null
+          actions.length ? h("div", { className: "message-actions" }, actions) : null
         ]),
         h("div", { className: "message-bubble" }, [
           escapeHtml(content)
@@ -543,6 +615,8 @@ export function AssistantMessageCard({
   isLoading = false,
   avatar,
   onCopy,
+  onRegenerate,
+  regenerateLabel,
   messageId = ""
 }) {
   return h(
@@ -556,7 +630,9 @@ export function AssistantMessageCard({
           role: isLoading ? "生成中" : "AI 群友",
           timestamp,
           isLoading,
-          onCopy
+          onCopy,
+          onRegenerate,
+          regenerateLabel
         }),
         MessageBubble({ content, thinking, isLoading, messageId })
       ])
@@ -581,6 +657,8 @@ export function SynthesisMessageCard({
   avatar,
   synthesisLabel = "整合",
   onCopy,
+  onRegenerate,
+  regenerateLabel,
   messageId = ""
 }) {
   return h(
@@ -595,7 +673,9 @@ export function SynthesisMessageCard({
           timestamp,
           isSynthesis: true,
           synthesisLabel,
-          onCopy
+          onCopy,
+          onRegenerate,
+          regenerateLabel
         }),
         MessageBubble({ content, isSynthesis: true, messageId })
       ])
@@ -618,10 +698,13 @@ export function MessageCard(message, options = {}) {
     userName = "我",
     synthesisLabel = "整合",
     currentLanguage = "zh-CN",
-    onCopy
+    onCopy,
+    onRegenerate,
+    onEdit
   } = options;
 
   const messageId = message.messageId || "";
+  const regenerateLabel = currentLanguage === "zh-CN" ? "重新生成" : "Regenerate";
 
   // User message
   if (message.kind === "user") {
@@ -629,7 +712,9 @@ export function MessageCard(message, options = {}) {
       content: message.content,
       timestamp: message.createdAt,
       userName: currentLanguage === "zh-CN" ? "我" : "You",
-      onCopy
+      onCopy,
+      onEdit,
+      editLabel: currentLanguage === "zh-CN" ? "编辑" : "Edit"
     });
   }
 
@@ -642,6 +727,8 @@ export function MessageCard(message, options = {}) {
       avatar: message.avatar,
       synthesisLabel,
       onCopy,
+      onRegenerate,
+      regenerateLabel,
       messageId
     });
   }
@@ -657,6 +744,8 @@ export function MessageCard(message, options = {}) {
     isLoading: message.isLoading,
     avatar: message.avatar,
     onCopy,
+    onRegenerate,
+    regenerateLabel,
     messageId
   });
 }
@@ -721,6 +810,9 @@ export const Components = {
   CopyIcon,
   CheckIcon,
   CopyButton,
+  RefreshIcon,
+  EditIcon,
+  ActionButton,
   MessageHeader,
   SkeletonLoader,
   ThinkingBlock,

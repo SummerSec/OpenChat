@@ -245,12 +245,15 @@
               </span>
               <button id="file-attachment-remove" class="file-remove-btn" title="Remove">&times;</button>
             </div>
+            <div class="image-attachment-bar" id="image-attachment-bar" hidden></div>
             <div class="composer-toolbar">
               <div class="tool-row">
                 <span class="tool-pill" id="run-status" data-i18n="home.ready"></span>
                 <span class="tool-pill" data-i18n="home.enterHint"></span>
                 <button class="tool-pill file-upload-pill" id="file-upload-btn" data-i18n="home.uploadFile"></button>
                 <input type="file" id="file-upload-input" accept=".md,.txt,.markdown,.text" hidden />
+                <button class="tool-pill file-upload-pill" id="image-upload-btn" type="button">🖼 图片</button>
+                <input type="file" id="image-upload-input" accept="image/*" multiple hidden />
                 <label class="expert-only-toggle" id="expert-only-toggle-label">
                   <input type="checkbox" id="expert-only-toggle" />
                   <span data-i18n="common.expertOnlyMode"></span>

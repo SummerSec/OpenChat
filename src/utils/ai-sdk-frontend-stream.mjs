@@ -21,7 +21,18 @@ export async function callFrontendStream(model, prompt, systemPrompt = "", optio
   if (Array.isArray(options.history) && options.history.length > 0) {
     messages.push(...options.history);
   }
-  messages.push({ role: "user", content: prompt });
+  const images = Array.isArray(options.images) ? options.images.filter(Boolean) : [];
+  if (images.length > 0) {
+    messages.push({
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        ...images.map((image) => ({ type: "image", image }))
+      ]
+    });
+  } else {
+    messages.push({ role: "user", content: prompt });
+  }
 
   const aiModel = createModelInstance(model);
   const result = streamText({

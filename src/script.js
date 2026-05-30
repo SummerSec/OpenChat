@@ -1043,6 +1043,11 @@ const fileAttachmentName = document.getElementById("file-attachment-name");
 const fileAttachmentRemove = document.getElementById("file-attachment-remove");
 let attachedFileContent = "";
 let attachedFileName = "";
+const imageUploadInput = document.getElementById("image-upload-input");
+const imageUploadBtn = document.getElementById("image-upload-btn");
+const imageAttachmentBar = document.getElementById("image-attachment-bar");
+let attachedImages = [];
+let currentRunImages = [];
 const synthModelSelect = document.getElementById("synth-model");
 const runStatus = document.getElementById("run-status");
 const selectedCount = document.getElementById("selected-count");
@@ -1200,6 +1205,7 @@ let promptTemplates = mergeBuiltInTemplates(readScopedJson(STORAGE_KEYS.promptTe
 let currentConversation = [];
 let activeConversationId = null;
 let renderedMessageElements = new Map(); // Track rendered message elements for incremental updates
+const expandedPastMessages = new Set(); // Past-round model answers the user manually expanded
 let activeHistoryIndex = null;
 let editingHistoryIndex = null;
 let expandedHistoryIndex = null;
@@ -1208,7 +1214,16 @@ let pendingFriendFocusId = null;
 let isGroupSettingsOpen = false;
 let isGroupMemberDetailsOpen = false;
 let isRunning = false;
+let currentRunAbort = null;
 let messageIdSeed = 0;
+
+function isAbortError(error) {
+  return Boolean(
+    currentRunAbort?.signal?.aborted ||
+    error?.name === "AbortError" ||
+    /\babort(ed)?\b/i.test(error?.message || "")
+  );
+}
 
 function cloneDefaultModels() {
   return DEFAULT_MODELS.map((item) => ({ ...item }));
@@ -2108,7 +2123,8 @@ async function apiRunWorkflowStream(payload, handlers = {}) {
   const response = await fetch("/api/chat/run/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: currentRunAbort?.signal
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
@@ -2138,6 +2154,14 @@ async function apiRunWorkflowStream(payload, handlers = {}) {
 
 function setRuntimeStatus(message) {
   if (runStatus) runStatus.textContent = message;
+}
+
+function setRunButtonStopping(running) {
+  if (!runWorkflowButton) return;
+  runWorkflowButton.textContent = running
+    ? (currentLanguage === "zh-CN" ? "停止" : "Stop")
+    : t("home.run");
+  runWorkflowButton.classList.toggle("is-stopping", running);
 }
 
 function autosizePromptInput() {
@@ -2554,16 +2578,17 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
     };
   }
 
+  let currentContent = "";
+  let currentThinking = "";
   try {
-    let currentContent = "";
-    let currentThinking = "";
-
     if (targetId) {
       updateConversationMessageById(targetId, { isLoading: true });
     }
 
     const output = await callFrontendStream(friend, prompt, systemPrompt, {
       history,
+      abortSignal: currentRunAbort?.signal,
+      images: currentRunImages,
       onDelta: targetId ? (delta) => {
         if (delta.type === "thinking") {
           currentThinking += delta.text;
@@ -2613,12 +2638,33 @@ async function generateFrontendFriendResponse(friend, prompt, platformContext, t
       error: ""
     };
   } catch (error) {
-    const classifiedError =
-      error?.message === "Failed to fetch"
-        ? currentLanguage === "zh-CN"
-          ? "浏览器请求失败，可能是 CORS、网络异常或目标服务拒绝前端直连"
-          : "Browser request failed. The endpoint may be blocked by CORS, network issues, or browser-side access restrictions."
-        : error.message || "";
+    if (isAbortError(error)) {
+      if (targetId) {
+        updateConversationMessageById(targetId, {
+          content: currentContent,
+          thinking: currentThinking,
+          isLoading: false
+        });
+      }
+      return {
+        friendId: friend.id,
+        name: friend.name,
+        avatar: friend.avatar || friend.modelAvatar || "",
+        modelConfigId: friend.modelConfigId,
+        modelConfigName: friend.modelConfigName,
+        provider: friend.provider,
+        model: friend.model,
+        source: buildPlatformSourceLabel(platformContext, currentLanguage === "zh-CN" ? "已停止" : "Stopped"),
+        thinking: currentThinking,
+        content: currentContent,
+        error: ""
+      };
+    }
+    const classifiedError = describeModelTestFailure({
+      message: error?.message || "",
+      language: currentLanguage,
+      mode: runtimeMode
+    }).message;
     const { thinking, content } = normalizeModelResult({
       content: mockResponseFor(friend, prompt, platformContext)
     });
@@ -2673,11 +2719,11 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
     };
   }
 
+  let currentContent = "";
+  let currentThinking = "";
   try {
-    let currentContent = "";
-    let currentThinking = "";
-
     const output = await callFrontendStream(synthesisFriend, synthesisPrompt, systemPrompt, {
+      abortSignal: currentRunAbort?.signal,
       onDelta: targetId ? (delta) => {
         if (delta.type === "thinking") {
           currentThinking += delta.text;
@@ -2716,6 +2762,21 @@ async function generateFrontendSynthesisResponse(synthesisFriend, prompt, result
       payload: synthesisPayload
     };
   } catch (error) {
+    if (isAbortError(error)) {
+      if (targetId) {
+        updateConversationMessageById(targetId, {
+          content: currentContent,
+          thinking: currentThinking,
+          isLoading: false
+        });
+      }
+      return {
+        content: currentContent,
+        source: currentLanguage === "zh-CN" ? "已停止" : "Stopped",
+        error: "",
+        payload: synthesisPayload
+      };
+    }
     const fallbackContent = buildFallbackSynthesis({ prompt, language: currentLanguage, results });
     if (targetId) {
       await streamTextToMessage(targetId, fallbackContent, "content");
@@ -3090,6 +3151,17 @@ function renderHistory() {
 
 function renderMessageStream() {
   if (!messageStream) return;
+  if (!renderMessageStream._collapseBound) {
+    renderMessageStream._collapseBound = true;
+    messageStream.addEventListener("click", (event) => {
+      const row = event.target.closest(".message-row--past");
+      if (!row || !event.target.closest(".message-bubble")) return;
+      const id = row.dataset.messageid;
+      if (!id) return;
+      if (row.classList.toggle("is-open")) expandedPastMessages.add(id);
+      else expandedPastMessages.delete(id);
+    });
+  }
   const userName = currentLanguage === "zh-CN" ? "\u6211" : "You";
 
   // Toggle workspace stage copy visibility based on conversation state
@@ -3149,6 +3221,12 @@ function renderMessageStream() {
   // iteration. Existing cards reuse a single tree walk via collectCardNodes
   // instead of issuing 7 querySelector calls.
   const chatRoot = document.getElementById("chat-root");
+  const latestRunId = [...currentConversation].reverse().find((m) => m.kind === "user")?.runId || null;
+  const applyPastState = (card, msg) => {
+    const isPast = msg.kind === "model" && latestRunId && msg.runId && msg.runId !== latestRunId;
+    card.classList.toggle("message-row--past", Boolean(isPast));
+    card.classList.toggle("is-open", Boolean(isPast && expandedPastMessages.has(msg.messageId)));
+  };
   let anchor = null;
   currentConversation.forEach((item) => {
     const existingElement = renderedMessageElements.get(item.messageId);
@@ -3158,7 +3236,12 @@ function renderMessageStream() {
         userName,
         synthesisLabel: currentLanguage === "zh-CN" ? "\u6574\u5408" : "Merged",
         currentLanguage,
-        onCopy: () => copyMessageToClipboard(item)
+        onCopy: () => copyMessageToClipboard(item),
+        onRegenerate:
+          item.kind === "model" || item.kind === "synthesis"
+            ? () => regenerateMessage(item.messageId)
+            : undefined,
+        onEdit: item.kind === "user" ? () => editAndResend(item.messageId) : undefined
       });
 
       if (anchor && anchor.nextSibling) {
@@ -3170,6 +3253,7 @@ function renderMessageStream() {
       }
 
       renderedMessageElements.set(item.messageId, card);
+      applyPastState(card, item);
       anchor = card;
     } else {
       const cardNodes = collectCardNodes(existingElement);
@@ -3205,6 +3289,11 @@ function renderMessageStream() {
 
       if (!item.isLoading && item.kind !== "user" && cardNodes.messageHead && !cardNodes.actionsNode) {
         const actionsDiv = Components.h("div", { className: "message-actions" }, [
+          Components.ActionButton({
+            onClick: () => regenerateMessage(item.messageId),
+            label: currentLanguage === "zh-CN" ? "\u91CD\u65B0\u751F\u6210" : "Regenerate",
+            icon: Components.RefreshIcon()
+          }),
           Components.CopyButton({
             onCopy: () => copyMessageToClipboard(item),
             label: currentLanguage === "zh-CN" ? "\u590D\u5236" : "Copy"
@@ -3213,6 +3302,7 @@ function renderMessageStream() {
         cardNodes.messageHead.appendChild(actionsDiv);
       }
 
+      applyPastState(existingElement, item);
       anchor = existingElement;
     }
   });
@@ -4101,6 +4191,8 @@ async function runWorkflow(options = {}) {
   }
 
   isRunning = true;
+  currentRunAbort = new AbortController();
+  setRunButtonStopping(true);
   setRuntimeStatus(t("common.running", { count: activeFriends.length }));
 
   // Auto-hide group settings panel when user starts chatting
@@ -4207,6 +4299,8 @@ async function runWorkflow(options = {}) {
   if (replaceCurrent) {
     currentConversation = [];
   }
+  // Only the latest round keeps a synthesis: drop synthesis cards from prior rounds.
+  currentConversation = currentConversation.filter((message) => message.kind !== "synthesis");
   currentConversation = currentConversation.concat(
     userMessage,
     ...friendPlaceholders
@@ -4220,6 +4314,10 @@ async function runWorkflow(options = {}) {
   attachedFileName = "";
   if (fileAttachmentBar) fileAttachmentBar.hidden = true;
   if (fileUploadInput) fileUploadInput.value = "";
+  currentRunImages = attachedImages.slice();
+  attachedImages = [];
+  if (imageUploadInput) imageUploadInput.value = "";
+  renderImageAttachments();
 
   let results = [];
   let mergedAnswer = buildFallbackSynthesis({ prompt, language: currentLanguage, results: [] });
@@ -4247,6 +4345,7 @@ async function runWorkflow(options = {}) {
         {
           prompt,
           language: currentLanguage,
+          images: currentRunImages,
           conversationHistory,
           friends: activeFriends.map((friend) => ({
             id: friend.id,
@@ -4477,8 +4576,150 @@ async function runWorkflow(options = {}) {
     renderMessageStream();
     setRuntimeStatus(error.message);
   } finally {
+    const wasAborted = currentRunAbort?.signal?.aborted;
     isRunning = false;
+    currentRunAbort = null;
+    currentRunImages = [];
+    setRunButtonStopping(false);
+    if (wasAborted) {
+      setRuntimeStatus(currentLanguage === "zh-CN" ? "已停止生成" : "Generation stopped");
+    }
   }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderImageAttachments() {
+  if (!imageAttachmentBar) return;
+  imageAttachmentBar.hidden = attachedImages.length === 0;
+  imageAttachmentBar.innerHTML = "";
+  attachedImages.forEach((src, index) => {
+    const thumb = Components.h("div", { className: "image-attachment-thumb" }, [
+      Components.h("img", { src, alt: "" }),
+      Components.h("button", {
+        className: "image-attachment-remove",
+        type: "button",
+        title: "Remove",
+        onClick: () => {
+          attachedImages.splice(index, 1);
+          renderImageAttachments();
+        }
+      }, ["\u00d7"])
+    ]);
+    imageAttachmentBar.appendChild(thumb);
+  });
+}
+
+function resolveFriendForRun(friendId) {
+  const profile = getFriendById(friendId);
+  if (!profile) return null;
+  const model = getModelConfigById(profile.modelConfigId);
+  return {
+    ...profile,
+    modelConfigName: model?.name || "",
+    provider: model?.provider || "",
+    model: model?.model || "",
+    baseUrl: model?.baseUrl || "",
+    apiKey: model?.apiKey || "",
+    thinkingEnabled: Boolean(model?.thinkingEnabled),
+    modelAvatar: model?.avatar || ""
+  };
+}
+
+function persistCurrentConversation() {
+  if (!currentConversation.length) return;
+  const history = getHistoryItems();
+  const session = activeHistoryIndex !== null && activeHistoryIndex >= 0 ? history[activeHistoryIndex] : null;
+  const lastUser = [...currentConversation].reverse().find((m) => m.kind === "user");
+  const prompt = lastUser?.content || session?.prompt || "";
+  const synthMsg = [...currentConversation].reverse().find((m) => m.kind === "synthesis");
+  const synthesisFriend = currentConversationGroupSettings.synthesisFriendId
+    ? getFriendById(currentConversationGroupSettings.synthesisFriendId)
+    : null;
+  const results = currentConversation
+    .filter((m) => m.kind === "model")
+    .map((m) => ({
+      friendId: m.friendId,
+      name: m.name,
+      content: m.content || "",
+      thinking: m.thinking || "",
+      error: m.error || "",
+      source: m.source || ""
+    }));
+  persistConversation({
+    prompt,
+    activeFriends: resolveConversationFriends(),
+    synthesisFriend,
+    mergedAnswer: synthMsg?.content || "",
+    disagreements: [],
+    createdAt: currentConversation[0]?.createdAt || new Date().toISOString(),
+    results
+  });
+}
+
+async function regenerateMessage(messageId) {
+  if (isRunning) return;
+  const message = currentConversation.find((m) => m.messageId === messageId);
+  if (!message || (message.kind !== "model" && message.kind !== "synthesis")) return;
+  const runId = message.runId;
+  const userMsg = currentConversation.find((m) => m.runId === runId && m.kind === "user");
+  const prompt = userMsg?.content || "";
+  if (!prompt) return;
+  const friend = resolveFriendForRun(message.friendId);
+  if (!friend) return;
+  const platformContext = getPlatformRoutingContext(currentConversationGroupSettings);
+
+  isRunning = true;
+  currentRunAbort = new AbortController();
+  setRunButtonStopping(true);
+  setRuntimeStatus(currentLanguage === "zh-CN" ? "重新生成中…" : "Regenerating…");
+  updateConversationMessageById(messageId, { content: "", thinking: "", error: "", isLoading: true });
+  renderMessageStream();
+
+  try {
+    let result;
+    if (message.kind === "synthesis") {
+      const results = currentConversation
+        .filter((m) => m.runId === runId && m.kind === "model")
+        .map((m) => ({ friendId: m.friendId, name: m.name, content: m.content || "", thinking: m.thinking || "", error: m.error || "", source: m.source || "" }));
+      result = await generateFrontendSynthesisResponse(friend, prompt, results, platformContext, messageId);
+    } else {
+      result = await generateFrontendFriendResponse(friend, prompt, platformContext, messageId, runId);
+    }
+    updateConversationMessageById(messageId, { source: result.source, error: result.error || "", isLoading: false });
+    renderMessageStream();
+    persistCurrentConversation();
+  } catch (error) {
+    updateConversationMessageById(messageId, { isLoading: false });
+    renderMessageStream();
+  } finally {
+    const wasAborted = currentRunAbort?.signal?.aborted;
+    isRunning = false;
+    currentRunAbort = null;
+    setRunButtonStopping(false);
+    setRuntimeStatus(wasAborted ? (currentLanguage === "zh-CN" ? "已停止生成" : "Generation stopped") : t("home.ready"));
+  }
+}
+
+function editAndResend(userMessageId) {
+  if (isRunning) return;
+  const message = currentConversation.find((m) => m.messageId === userMessageId);
+  if (!message || message.kind !== "user") return;
+  if (promptInput) {
+    promptInput.value = message.content || "";
+    autosizePromptInput();
+    promptInput.focus();
+  }
+  removeMessagesByRunId(message.runId);
+  renderMessageStream();
+  persistCurrentConversation();
 }
 
 function bindLanguageControls() {
@@ -4560,7 +4801,11 @@ function bindWorkspaceEvents() {
   });
 
   runWorkflowButton?.addEventListener("click", () => {
-    runWorkflow();
+    if (isRunning) {
+      currentRunAbort?.abort();
+    } else {
+      runWorkflow();
+    }
   });
   rerollSynthesisButton?.addEventListener("click", () => {
     runWorkflow({ replaceCurrent: true });
@@ -4600,6 +4845,24 @@ function bindWorkspaceEvents() {
     attachedFileName = "";
     if (fileAttachmentBar) fileAttachmentBar.hidden = true;
     if (fileUploadInput) fileUploadInput.value = "";
+  });
+
+  imageUploadBtn?.addEventListener("click", () => {
+    imageUploadInput?.click();
+  });
+
+  imageUploadInput?.addEventListener("change", async () => {
+    const files = Array.from(imageUploadInput.files || []);
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        attachedImages.push(await readFileAsDataUrl(file));
+      } catch (err) {
+        console.error("Image read failed:", err);
+      }
+    }
+    imageUploadInput.value = "";
+    renderImageAttachments();
   });
 
   newChatButton?.addEventListener("click", () => {

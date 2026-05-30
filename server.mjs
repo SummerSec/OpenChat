@@ -303,7 +303,7 @@ function createAIProvider(model, apiKey) {
 }
 
 async function streamFriendResponse(friend, prompt, onChunk, options = {}) {
-  const { thinkingEnabled = false, signal, history = [] } = options;
+  const { thinkingEnabled = false, signal, history = [], images = [] } = options;
 
   const model = {
     name: friend.modelConfigName || friend.name,
@@ -365,7 +365,18 @@ async function streamFriendResponse(friend, prompt, onChunk, options = {}) {
   if (history.length > 0) {
     messages.push(...history);
   }
-  messages.push({ role: "user", content: prompt });
+  const imageList = Array.isArray(images) ? images.filter(Boolean) : [];
+  if (imageList.length > 0) {
+    messages.push({
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        ...imageList.map((image) => ({ type: "image", image }))
+      ]
+    });
+  } else {
+    messages.push({ role: "user", content: prompt });
+  }
 
   let fullContent = "";
   let fullThinking = "";
@@ -715,6 +726,7 @@ async function handleApi(req, res, url) {
     const body = await parseBody(req);
     const db = await readDb();
     const { prompt, language, friends, groupSettings, synthesisFriend, conversationHistory } = resolveRunPayload(body, db);
+    const images = Array.isArray(body.images) ? body.images : [];
     if (!prompt || friends.length === 0) {
       sendJson(res, 400, { error: "Need prompt and at least one selected friend." });
       return true;
@@ -758,7 +770,7 @@ async function handleApi(req, res, url) {
             writeNdjson(res, { type: "friend_thinking_delta", friendId: friend.id, delta: chunk.text });
           }
         },
-        { language, thinkingEnabled: friend.thinkingEnabled, signal: controller.signal, history: friendHistory }
+        { language, thinkingEnabled: friend.thinkingEnabled, signal: controller.signal, history: friendHistory, images }
       );
 
       if (result.thinking) {

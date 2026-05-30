@@ -1010,6 +1010,10 @@ a {
   border: 1px solid var(--border);
 }
 
+.theme-setting-icon.linear {
+  background: linear-gradient(135deg, #ffffff 0%, #e9e9ec 60%, #5e6ad2 100%);
+}
+
 .theme-setting-icon.dark {
   background: linear-gradient(135deg, #252320 0%, #1a1815 100%);
 }

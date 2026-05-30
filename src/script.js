@@ -467,6 +467,7 @@ const I18N = {
       appearanceLabel: "\u5916\u89c8",
       appearanceTitle: "\u4e3b\u9898\u4e0e\u5b57\u4f53",
       themeLabel: "\u4e3b\u9898",
+      themeLinear: "Linear",
       themeSky: "\u5929\u7a7a\u4e4b\u84dd",
       themeLavender: "\u85b0\u8863\u8349\u7d2b",
       themeCream: "\u5976\u6cb9\u6e29\u6696",
@@ -714,6 +715,7 @@ const I18N = {
       appearanceLabel: "Appearance",
       appearanceTitle: "Theme & Font size",
       themeLabel: "Theme",
+      themeLinear: "Linear",
       themeSky: "Sky Blue",
       themeLavender: "Soft Lavender",
       themeCream: "Warm Cream",
@@ -1115,8 +1117,16 @@ let currentLanguage = localStorage.getItem(STORAGE_KEYS.language) || "zh-CN";
 
 // Theme initialization
 function initTheme() {
-  let savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || "sky";
-  if (savedTheme === "light") savedTheme = "sky";
+  // One-time migration: the old build force-defaulted to "sky"; flip those
+  // installs to the new "linear" default exactly once (manual picks still stick).
+  if (!localStorage.getItem("openchat-theme-migrated")) {
+    localStorage.setItem("openchat-theme-migrated", "1");
+    if (localStorage.getItem(STORAGE_KEYS.theme) === "sky") {
+      localStorage.setItem(STORAGE_KEYS.theme, "linear");
+    }
+  }
+  let savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || "linear";
+  if (savedTheme === "light") savedTheme = "linear";
   applyTheme(savedTheme);
   // Font size: default 14px, accept both old string values and new numeric values
   const savedFontSize = localStorage.getItem(STORAGE_KEYS.fontSize);

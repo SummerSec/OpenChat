@@ -446,6 +446,7 @@ const I18N = {
       ready: "\u5c31\u7eea",
       finalSynthesis: "\u6700\u7ec8\u6574\u5408",
       rebuild: "\u91cd\u65b0\u751f\u6210",
+      synthesize: "\u603b\u7ed3\u7fa4\u53cb",
       suggestion1: "\u51b7\u6c34\u771f\u7684\u80fd\u591a\u6d88\u8017\u70ed\u91cf\u5417\uff1f",
       suggestion2: "\u8fdc\u7a0b\u529e\u516c\u6bd4\u5750\u73ed\u66f4\u597d\u5417\uff1f",
       suggestion3: "\u5b66\u4e60\u4e00\u95e8\u65b0\u8bed\u8a00\u7684\u6700\u4f73\u65b9\u5f0f\u662f\u4ec0\u4e48\uff1f",
@@ -695,6 +696,7 @@ const I18N = {
       ready: "Ready",
       finalSynthesis: "Final synthesis",
       rebuild: "Rebuild",
+      synthesize: "Synthesize",
       suggestion1: "Does cold water burn more calories?",
       suggestion2: "Is remote work better than office work?",
       suggestion3: "Best way to learn a new language?",
@@ -4240,6 +4242,9 @@ async function runWorkflow(options = {}) {
   if (synthesisFriend) {
     currentConversationGroupSettings.synthesisFriendId = synthesisFriend.id;
   }
+  // Synthesis is on-demand: the user triggers it via the "总结/Synthesize"
+  // button (synthesizeLatestRound). Do not auto-run it during a normal turn.
+  synthesisFriend = null;
   const userMessage = normalizeConversationMessage(
     { role: "user", kind: "user", content: prompt, createdAt },
     createdAt
@@ -4364,7 +4369,7 @@ async function runWorkflow(options = {}) {
                   : friend.systemPrompt
               }${platformPromptAddon}`.trim()
           })),
-          groupSettings: cloneGroupSettings(currentConversationGroupSettings)
+          groupSettings: { ...cloneGroupSettings(currentConversationGroupSettings), synthesisEnabled: false, synthesisFriendId: null }
         },
         {
           onEvent(event) {
@@ -4722,6 +4727,71 @@ function editAndResend(userMessageId) {
   persistCurrentConversation();
 }
 
+async function synthesizeLatestRound() {
+  if (isRunning) return;
+  const latestRunId = [...currentConversation].reverse().find((m) => m.kind === "user")?.runId || null;
+  const userMsg = latestRunId ? currentConversation.find((m) => m.runId === latestRunId && m.kind === "user") : null;
+  const prompt = userMsg?.content || "";
+  const results = currentConversation
+    .filter((m) => m.runId === latestRunId && m.kind === "model")
+    .map((m) => ({ friendId: m.friendId, name: m.name, content: m.content || "", thinking: m.thinking || "", error: m.error || "", source: m.source || "" }));
+  if (!prompt || results.length === 0) {
+    setRuntimeStatus(currentLanguage === "zh-CN" ? "暂无可总结的对话" : "Nothing to synthesize yet");
+    return;
+  }
+  const synthesisFriendId = synthModelSelect?.value || currentConversationGroupSettings.synthesisFriendId;
+  const synthesisFriend = synthesisFriendId ? resolveFriendForRun(synthesisFriendId) : null;
+  if (!synthesisFriend) {
+    setRuntimeStatus(currentLanguage === "zh-CN" ? "请先在群设置选择总结群友" : "Select a synthesis friend in group settings first");
+    return;
+  }
+  const platformContext = getPlatformRoutingContext(currentConversationGroupSettings);
+  const createdAt = new Date().toISOString();
+
+  // Keep one synthesis for the latest round: drop any previous one.
+  currentConversation = currentConversation.filter((m) => m.kind !== "synthesis");
+  const placeholder = normalizeConversationMessage(
+    {
+      role: "assistant",
+      kind: "synthesis",
+      friendId: synthesisFriend.id,
+      name: `${synthesisFriend.name} ${t("common.synthesis")}`,
+      avatar: synthesisFriend.avatar || synthesisFriend.modelAvatar || "",
+      modelConfigId: synthesisFriend.modelConfigId,
+      modelConfigName: synthesisFriend.modelConfigName,
+      provider: synthesisFriend.provider,
+      model: synthesisFriend.model,
+      createdAt,
+      isLoading: true
+    },
+    createdAt
+  );
+  placeholder.runId = latestRunId;
+  currentConversation.push(placeholder);
+
+  isRunning = true;
+  currentRunAbort = new AbortController();
+  setRunButtonStopping(true);
+  setRuntimeStatus(currentLanguage === "zh-CN" ? "总结中…" : "Synthesizing…");
+  renderMessageStream();
+
+  try {
+    const result = await generateFrontendSynthesisResponse(synthesisFriend, prompt, results, platformContext, placeholder.messageId);
+    updateConversationMessageById(placeholder.messageId, { source: result.source, error: result.error || "", isLoading: false });
+    renderMessageStream();
+    persistCurrentConversation();
+  } catch (error) {
+    updateConversationMessageById(placeholder.messageId, { isLoading: false });
+    renderMessageStream();
+  } finally {
+    const wasAborted = currentRunAbort?.signal?.aborted;
+    isRunning = false;
+    currentRunAbort = null;
+    setRunButtonStopping(false);
+    setRuntimeStatus(wasAborted ? (currentLanguage === "zh-CN" ? "已停止生成" : "Generation stopped") : t("home.ready"));
+  }
+}
+
 function bindLanguageControls() {
   document.querySelectorAll(".lang-button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -4808,7 +4878,7 @@ function bindWorkspaceEvents() {
     }
   });
   rerollSynthesisButton?.addEventListener("click", () => {
-    runWorkflow({ replaceCurrent: true });
+    synthesizeLatestRound();
   });
   synthModelSelect?.addEventListener("change", () => {
     currentConversationGroupSettings.synthesisFriendId = synthModelSelect.value || null;

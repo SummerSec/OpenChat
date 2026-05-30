@@ -89,7 +89,7 @@ npm install
 npm run dev
 ```
 
-访问：`http://127.0.0.1:4173`
+访问：`http://127.0.0.1:9090`
 
 ### 启动后端服务
 
@@ -174,19 +174,19 @@ POST /api/chat/run/stream
 
 ## 部署说明
 
-### 静态部署
+OpenChat 有两种部署形态，分别对应两种运行模式。前端基于 Vite 构建，**部署前需先 `npm run build` 生成 `dist/`**（不能直接用源码运行）。
 
-适合部署到 Vercel、Cloudflare Pages 等静态平台：
+### 形态 A：纯前端 / 静态部署（推荐）
+
+对应 **Frontend mode**：API key 存浏览器、浏览器直连模型接口。构建后把 `dist/` 部署到任意静态托管（Vercel、Cloudflare Pages、Nginx、GitHub Pages 等）。
 
 ```bash
-npm run build
+npm run build   # 产物在 dist/
 ```
 
-产物目录：`dist/`
+#### Vercel 部署
 
-### Vercel 部署
-
-Vercel 适合部署 **Frontend mode**（纯静态）。OpenChat 的 Node 后端是自托管 HTTP Server，不适配 Vercel 的 Serverless，因此在 Vercel 上请使用前端模式（API key 存浏览器、浏览器直连模型接口）。
+Vercel 适合部署 **Frontend mode**（纯静态）。OpenChat 的 Node 后端是自托管 HTTP Server，不适配 Vercel 的 Serverless，因此在 Vercel 上请使用前端模式。
 
 **方式一：导入 Git 仓库（推荐）**
 
@@ -208,13 +208,53 @@ vercel --prod   # 生产部署
 
 > **注意：** Vercel 域名是 HTTPS。若模型 Base URL 为 HTTP，会触发浏览器的 Mixed Content 拦截，详见下方「常见问题」。
 
-### Node 服务部署
+### 形态 B：自托管 + Node 后端
 
-```bash
-node server.mjs
-```
+对应 **Backend mode**：Node 服务（`server.mjs`）提供 `/api/*` 接口，并把数据持久化到 `.data/openchat-db.json`。前端通过**同源** `/api/*` 调用后端，因此需让静态前端与 API 处于同一域名下，推荐用反向代理收敛。
 
-默认端口：`8787`
+1. 构建前端：
+
+   ```bash
+   npm run build
+   ```
+
+2. 启动后端（API + 数据持久化，默认端口 8787，可用 `PORT` 覆盖）：
+
+   ```bash
+   PORT=8787 npm run start
+   ```
+
+3. 用 Nginx / Caddy 把静态 `dist/` 与 `/api/*` 收敛到同一域名并启用 HTTPS：
+
+   ```nginx
+   server {
+     listen 443 ssl;
+     server_name your.domain;
+     # ssl_certificate ...;  ssl_certificate_key ...;
+
+     root /path/to/OpenChat/dist;
+     index index.html;
+
+     location /api/ {
+       proxy_pass http://127.0.0.1:8787;
+       proxy_set_header Host $host;
+     }
+     location / {
+       try_files $uri $uri/ /index.html;
+     }
+   }
+   ```
+
+4. 打开站点进入 `settings.html`，将运行模式切到 **Backend**。
+5. 用 pm2 / systemd 守护后端进程，并定期备份 `.data/` 目录：
+
+   ```bash
+   npm i -g pm2
+   pm2 start "npm run start" --name openchat
+   pm2 save
+   ```
+
+> 所有后端数据都在 `.data/openchat-db.json`，备份或迁移时复制整个 `.data/` 目录即可。
 
 ## 常见问题
 

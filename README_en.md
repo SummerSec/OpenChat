@@ -89,7 +89,7 @@ npm install
 npm run dev
 ```
 
-Visit: `http://127.0.0.1:4173`
+Visit: `http://127.0.0.1:9090`
 
 ### Start the backend server
 
@@ -174,19 +174,19 @@ Main data includes:
 
 ## Deployment
 
-### Static deployment
+OpenChat has two deployment shapes, one for each runtime mode. The frontend is built with Vite, so **you must run `npm run build` to generate `dist/` before deploying** (the raw source is not browser-runnable).
 
-Suitable for Vercel, Cloudflare Pages, and other static hosting platforms:
+### Shape A: Frontend / static deployment (recommended)
+
+For **Frontend mode**: API keys live in the browser, which calls model APIs directly. After building, deploy `dist/` to any static host (Vercel, Cloudflare Pages, Nginx, GitHub Pages, etc.).
 
 ```bash
-npm run build
+npm run build   # output in dist/
 ```
 
-Output directory: `dist/`
+#### Deploy to Vercel
 
-### Deploy to Vercel
-
-Vercel is a good fit for **Frontend mode** (pure static). OpenChat's Node backend is a self-hosted HTTP server and is not compatible with Vercel's serverless model, so use frontend mode on Vercel (API keys live in the browser, which calls model APIs directly).
+Vercel is a good fit for **Frontend mode** (pure static). OpenChat's Node backend is a self-hosted HTTP server and is not compatible with Vercel's serverless model, so use frontend mode on Vercel.
 
 **Option 1: Import a Git repository (recommended)**
 
@@ -208,13 +208,53 @@ vercel --prod   # production deployment
 
 > **Note:** Vercel domains are HTTPS. If a model's Base URL uses HTTP, the browser's Mixed Content policy will block it — see the FAQ below.
 
-### Node server deployment
+### Shape B: Self-hosted with the Node backend
 
-```bash
-node server.mjs
-```
+For **Backend mode**: the Node server (`server.mjs`) provides the `/api/*` routes and persists data to `.data/openchat-db.json`. The frontend calls the backend via **same-origin** `/api/*`, so the static frontend and the API must share one origin — a reverse proxy is recommended.
 
-Default port: `8787`
+1. Build the frontend:
+
+   ```bash
+   npm run build
+   ```
+
+2. Start the backend (API + persistence, port 8787 by default, override with `PORT`):
+
+   ```bash
+   PORT=8787 npm run start
+   ```
+
+3. Use Nginx / Caddy to serve static `dist/` and proxy `/api/*` under one HTTPS domain:
+
+   ```nginx
+   server {
+     listen 443 ssl;
+     server_name your.domain;
+     # ssl_certificate ...;  ssl_certificate_key ...;
+
+     root /path/to/OpenChat/dist;
+     index index.html;
+
+     location /api/ {
+       proxy_pass http://127.0.0.1:8787;
+       proxy_set_header Host $host;
+     }
+     location / {
+       try_files $uri $uri/ /index.html;
+     }
+   }
+   ```
+
+4. Open the site, go to `settings.html`, and switch the runtime mode to **Backend**.
+5. Keep the backend alive with pm2 / systemd, and back up the `.data/` directory regularly:
+
+   ```bash
+   npm i -g pm2
+   pm2 start "npm run start" --name openchat
+   pm2 save
+   ```
+
+> All backend data lives in `.data/openchat-db.json`; copy the whole `.data/` directory to back up or migrate.
 
 ## FAQ
 

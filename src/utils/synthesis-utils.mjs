@@ -8,7 +8,6 @@ export function buildSynthesisPayload({ prompt = "", language = "zh-CN", results
           model: item.model || "",
           provider: item.provider || "",
           content: item.content || "",
-          thinking: item.thinking || "",
           source: item.source || ""
         }))
       : []

@@ -460,6 +460,8 @@ const I18N = {
       copy:
         "\u7528\u6237\u53ef\u4ee5\u4e3a\u6bcf\u4e2a\u6a21\u578b\u914d\u7f6e provider\u3001model id\u3001base URL \u4e0e API key\u3002",
       runtimeLabel: "\u8fd0\u884c\u6a21\u5f0f",
+      corsProxyLabel: "CORS \u4ee3\u7406\uff08\u4ec5\u524d\u7aef\u6a21\u5f0f\uff09",
+      corsProxyHint: "\u524d\u7aef\u6a21\u5f0f\u4e0b\u6d4f\u89c8\u5668\u76f4\u8fde\u6a21\u578b\u63a5\u53e3\u53ef\u80fd\u88ab CORS \u62e6\u622a\u3002\u586b\u5165\u4ee3\u7406\u524d\u7f00\uff08\u5982 https://proxy/ \uff09\uff0c\u6216\u5e26 {url} \u5360\u4f4d\u7b26\uff08\u5982 https://proxy/?url={url}\uff09\u3002\u7559\u7a7a\u5219\u4e0d\u4f7f\u7528\u4ee3\u7406\u3002",
       runtimeTitle: "\u6267\u884c\u65b9\u5f0f",
       frontendMode: "\u524d\u7aef\u6a21\u5f0f",
       backendMode: "\u540e\u7aef\u6a21\u5f0f",
@@ -709,6 +711,8 @@ const I18N = {
       title: "Model configuration",
       copy: "Configure provider, model id, base URL, and API key for each model.",
       runtimeLabel: "Runtime",
+      corsProxyLabel: "CORS proxy (frontend mode only)",
+      corsProxyHint: "In frontend mode the browser calls model APIs directly and may be blocked by CORS. Enter a proxy prefix (e.g. https://proxy/) or use a {url} placeholder (e.g. https://proxy/?url={url}). Leave empty to disable.",
       runtimeTitle: "Execution mode",
       frontendMode: "Frontend mode",
       backendMode: "Backend mode",
@@ -5217,6 +5221,16 @@ function bindSettingsEvents() {
     rerenderAll();
     await ensureFrontendAccess();
   });
+
+  const corsProxyInput = document.getElementById("cors-proxy-input");
+  if (corsProxyInput) {
+    corsProxyInput.value = localStorage.getItem("openchat-cors-proxy") || "";
+    corsProxyInput.addEventListener("input", () => {
+      const value = corsProxyInput.value.trim();
+      if (value) localStorage.setItem("openchat-cors-proxy", value);
+      else localStorage.removeItem("openchat-cors-proxy");
+    });
+  }
 
   modelToggleGrid?.addEventListener("change", async (event) => {
     const input = event.target.closest('input[type="checkbox"]');

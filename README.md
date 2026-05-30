@@ -225,6 +225,10 @@ node server.mjs
 
 如果同时遇到跨域（CORS）问题，可安装 Chrome 插件 [Allow CORS: Access-Control-Allow-Origin](https://chromewebstore.google.com/detail/lhobafahddgcelffkeicbaginigeejlf)，启用后即可解除浏览器的 CORS 限制。
 
+**解决方法（内置 CORS 代理）：**
+
+在「设置 → 运行模式」中填写「CORS 代理」地址（仅前端模式生效）。支持两种格式：代理前缀（如 `https://proxy/`，会拼成 `https://proxy/<目标地址>`）或带 `{url}` 占位符（如 `https://proxy/?url={url}`）。填写后，前端直连的所有模型请求都会经由该代理转发，从而绕过 CORS。留空则不使用代理。
+
 > **注意：** 以上设置仅对当前站点生效，不会影响其他网站的安全策略。每个浏览器需单独设置。
 
 ## 许可证

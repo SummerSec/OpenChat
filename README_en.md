@@ -225,6 +225,10 @@ When OpenChat is deployed on an HTTPS domain and a model's Base URL uses HTTP, t
 
 If you also encounter cross-origin (CORS) issues, install the Chrome extension [Allow CORS: Access-Control-Allow-Origin](https://chromewebstore.google.com/detail/lhobafahddgcelffkeicbaginigeejlf). Once enabled, it removes the browser's CORS restrictions.
 
+**Solution (built-in CORS proxy):**
+
+In **Settings → Runtime**, fill in the **CORS proxy** field (frontend mode only). Two formats are supported: a proxy prefix (e.g. `https://proxy/`, which becomes `https://proxy/<target-url>`) or a `{url}` placeholder (e.g. `https://proxy/?url={url}`). Once set, all direct model requests from the browser are routed through the proxy to bypass CORS. Leave it empty to disable.
+
 > **Note:** These settings only apply to the current site and do not affect the security policy of other websites. Each browser must be configured separately.
 
 ## License

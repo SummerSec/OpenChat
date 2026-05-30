@@ -4308,8 +4308,6 @@ async function runWorkflow(options = {}) {
   if (replaceCurrent) {
     currentConversation = [];
   }
-  // Only the latest round keeps a synthesis: drop synthesis cards from prior rounds.
-  currentConversation = currentConversation.filter((message) => message.kind !== "synthesis");
   currentConversation = currentConversation.concat(
     userMessage,
     ...friendPlaceholders
